@@ -154,6 +154,18 @@ class CompositeEnvelope:
         for s in self.states[state_index][1]:
             s.expansion_level = ExpansionLevel.Matrix
 
+    def _find_composite_state_index(self, *states):
+        composite_state_index = None
+        for i, (_, states_group) in enumerate(self.states):
+            if all(s in states_group for s in states):
+                composite_state_index = i
+                return composite_state_index
+
+        if composite_state_index is None:
+            raise ValueError("Specified states do not match any composite state.")
+
+        
+
     def rearange(self, *ordered_states):
         """
         Uses the swap operation to rearange the states, according to the given order
@@ -218,4 +230,43 @@ class CompositeEnvelope:
             self.states[state_index][1] = order
 
     def apply_operation(self, operation, *states):
-        pass
+        from photon_weave.operation.fock_operation import FockOperation
+
+    def apply_operator(self, operation, *states):
+        """
+        Assumes the spaces are correctly ordered
+        """
+        from photon_weave.state.fock import Fock
+        from photon_weave.state.polarization import Polarization
+        from photon_weave.operation.fock_operation import FockOperation, FockOperationType
+        from photon_weave.operation.polarization_operations import PolarizationOperation, PolarizationOperationType
+        csi = self._find_composite_state_index(*states)
+        composite_operator = 1
+        skip_count = 0
+        for i, state in enumerate(self.states[csi][1]):
+            if skip_count > 0:
+                skip_count -= 1
+                continue
+            if all(state is self.states[csi][1][i+j] for j, state in enumerate(states)):
+                composite_operator = np.kron(
+                    composite_operator, operation.operator)
+                skip_count += len(states)
+            else:
+                identity = None
+                if isinstance(state, Fock):
+                    identity = FockOperation(FockOperationType.Identity)
+                    identity.compute_operator(state.dimensions)
+                    identity = identity.operator
+                elif isinstance(state, Polarization()):
+                    identity = PolarizationOperation(PolarizationOperationType.Identity)
+                    identity.compute_operator(state.dimensions)
+                    identity = identity.operator
+                composite_operator = np.kron(
+                    composite_operator,
+                    identity)
+        if self.states[csi][1][0].expansion_level == ExpansionLevel.Vector:
+            self.states[csi][0] = composite_operator @ self.states[csi][0]
+        elif self.states[csi][1][0].expansion_level == ExpansionLevel.Matrix:
+            self.states[csi][0] = composite_operator @ self.states[csi][0]
+            self.states[csi][0] = self.states[csi][0] @ composite_operator.conj().T
+                    

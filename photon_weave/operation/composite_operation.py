@@ -2,7 +2,9 @@
 Composite Operation:
 operates on multiple spaces
 """
+from scipy.linalg import expm
 from enum import Enum, auto
+import numpy as np
 from typing import Union
 from photon_weave.state.composite_envelope import CompositeEnvelope
 from photon_weave.state.envelope import Envelope
@@ -54,6 +56,10 @@ class CompositeOperation():
         self.operation = operation
         self.operator = None
         self.apply_num = apply_num
+        match self.operation:
+            case CompositeOperationType.NonPolarizingBeamSplit:
+                if "theta" not in kwargs:
+                    self.kwargs["theta"]=np.pi/4
 
     def operate(self, *args) -> Union[CompositeEnvelope, Envelope]:
         match self.operation:
@@ -67,14 +73,25 @@ class CompositeOperation():
                 "Beam split can operate only on two states")
         ce = args[0].composite_envelope
         ce.combine(args[0].fock, args[1].fock)
-        ce.rearange(args[1].fock, args[0].fock)
+        ce.rearange(args[0].fock, args[1].fock)
         dim1 = args[0].fock.dimensions
         dim2 = args[1].fock.dimensions
-        self.compute_operator(dim1, dim2)
+        self.compute_operator(dimensions=(dim1, dim2))
+        ce.apply_operator(self, args[0].fock, args[1].fock)
         
 
     def compute_operator(self, *args, **kwargs):
+        from photon_weave.operation.fock_operation import FockOperation, FockOperationType
         match self.operation:
             case CompositeOperationType.NonPolarizingBeamSplit:
-                pass
+                fo = FockOperation(operation=FockOperationType.Identity)
+                dim1, dim2 = kwargs["dimensions"]
+                a = fo._create(dim1)
+                a_dagger = fo._destroy(dim1)
+                b = fo._create(dim2)
+                b_dagger = fo._destroy(dim2)
+                print(self.kwargs["theta"])
+                self.operator = np.kron(a_dagger, b) + np.kron(a, b_dagger)
+                self.operator = self.kwargs["theta"] * self.operator
+                self.operator = expm(1j* self.operator)
 

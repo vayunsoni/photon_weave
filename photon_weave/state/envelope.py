@@ -79,15 +79,15 @@ class Envelope:
             return 2
         else:
             return -1
-            
+
     def separate(self):
         pass
 
     def apply_operation(self, operation: GenericOperation):
         from photon_weave.operation.fock_operation import (
-            FockOperation, FockOperationType )
+            FockOperation, FockOperationType)
         from photon_weave.operation.polarization_operations import (
-            PolarizationOperationType, PolarizationOperation )
+            PolarizationOperationType, PolarizationOperation)
         if isinstance(operation, FockOperation):
             if (self.composite_vector is None and
                 self.composite_matrix is None):

@@ -248,9 +248,11 @@ class CompositeEnvelope:
                 skip_count -= 1
                 continue
             if all(state is self.states[csi][1][i+j] for j, state in enumerate(states)):
+                if operation.operator is None:
+                    operation.compute_operator(state.dimensions)
                 composite_operator = np.kron(
                     composite_operator, operation.operator)
-                skip_count += len(states)
+                skip_count += len(states)-1
             else:
                 identity = None
                 if isinstance(state, Fock):
@@ -264,6 +266,7 @@ class CompositeEnvelope:
                 composite_operator = np.kron(
                     composite_operator,
                     identity)
+
         if self.states[csi][1][0].expansion_level == ExpansionLevel.Vector:
             self.states[csi][0] = composite_operator @ self.states[csi][0]
         elif self.states[csi][1][0].expansion_level == ExpansionLevel.Matrix:

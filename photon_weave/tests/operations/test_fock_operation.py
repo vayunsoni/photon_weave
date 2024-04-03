@@ -10,6 +10,7 @@ from photon_weave.operation.fock_operation import (
 from photon_weave.state.fock import Fock
 from photon_weave.state.polarization import Polarization
 from photon_weave.state.envelope import Envelope
+from photon_weave.state.composite_envelope import CompositeEnvelope
 
 
 class TestFockOperation(unittest.TestCase):
@@ -68,6 +69,24 @@ class TestFockOperation(unittest.TestCase):
             expected_density_matrix
         ))
 
+    def test_creation_operator_second(self):
+        """
+        Making sure that the creation operator is correctly applied to the state which is in envelop
+        or in composite envelope
+        """
+        env1 = Envelope()
+        env2 = Envelope()
+        env1.fock.resize(2)
+        env2.fock.resize(2)
+        ce = CompositeEnvelope(env1, env2)
+        ce.combine(env1.fock, env2.fock)
+        op = FockOperation(operation=FockOperationType.Creation)
+        ce.apply_operator(op, env1.fock)
+        self.assertTrue(np.array_equal(
+            ce.states[0][0],
+            [[0], [0], [1], [0]]
+        ))
+        
     def test_annihilation_operator(self):
         fock = Fock()
         op = FockOperation(FockOperationType.Annihilation)

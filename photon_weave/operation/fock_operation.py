@@ -109,7 +109,7 @@ class FockOperation(GenericOperation):
             case FockOperationType.Squeeze:
                 return 1
         
-    def cutoff_required(self) -> int:
+    def cutoff_required(self, num_quanta=0) -> int:
         """
         Returns the expansion level required
         """

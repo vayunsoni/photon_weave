@@ -108,6 +108,27 @@ class Envelope:
                     self.composite_matrix = operator @ self.composite_matrix
                     op_dagger = operator.conj().T
                     self.composite_matrix = self.composite_matrix @ op_dagger
+        if isinstance(operation, PolarizationOperation):
+            if (self.composite_vector is None and
+                self.composite_matrix is None):
+                self.polarization.apply_operation(operation)
+            else:
+                fock_index = self.fock.index
+                polarization_index = self.polarization.index
+                operators = [1, 1]
+                fock_identity = FockOperation(
+                    operation=FockOperationType.Identity
+                )
+                fock_identity.compute_operator(self.fock.dimensions)
+                operators[polarization_index] = operation.operator
+                operators[fock_index] = fock_identity.operator
+                operator = np.kron(*operators)
+                if self.composite_vector is not None:
+                    self.composite_vector = operator @ self.composite_vector
+                if self.composite_matrix is not None:
+                    self.composite_matrix = operator @ self.composite_matrix
+                    op_dagger = operator.conj().T
+                    self.composite_matrix = self.composite_matrix @ op_dagger
 
 
 

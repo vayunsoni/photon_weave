@@ -110,7 +110,8 @@ class Fock:
         while self.expansion_level < min_expansion_level:
             self.expand()
 
-        cutoff_required = operation.cutoff_required()
+
+        cutoff_required = operation.cutoff_required(self._num_quanta)
         if cutoff_required > self.dimensions:
             self.resize(cutoff_required)
 
@@ -118,10 +119,8 @@ class Fock:
             case FockOperationType.Creation:
                 if self._num_quanta + operation.apply_count + 1 > self.dimensions:
                     self.resize(self._num_quanta + operation.apply_count + 1)
-                    
-                
-
         operation.compute_operator(self.dimensions)
+
         self._execute_apply(operation)
 
     @property
@@ -168,8 +167,8 @@ class Fock:
 
 
     def resize(self, new_dimensions):
-        self.dimensions = new_dimensions
         if self.label is not None:
+            self.dimensions = new_dimensions
             return
         # Pad
         if self.dimensions < new_dimensions:
@@ -184,7 +183,7 @@ class Fock:
                     ((0, pad_size), (0, pad_size)),
                     'constant', constant_values=0)
         # Truncate
-        if self.dimensions > new_dimensions:
+        elif self.dimensions > new_dimensions:
             pad_size = new_dimensions - self.dimensions 
             if self.state_vector is not None:
                 if np.all(self.state_vector[new_dimensions:] == 0):
@@ -194,6 +193,7 @@ class Fock:
                 right_columns_zero = np.all(self.density_matrix[:, new_dimensions:] == 0)
                 if bottom_rows_zero and right_columns_zero:
                     self.density_matrix = self.density_matrix[:new_dimensions, :new_dimensions]
+        self.dimensions = new_dimensions
 
 
     def set_index(self, minor, major=-1):

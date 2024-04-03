@@ -42,7 +42,6 @@ class Polarization:
         else:
             return "Invalid Fock object"
 
-
     def expand(self):
         if self.label is not None:
             match self.label:
@@ -73,9 +72,43 @@ class Polarization:
         self.density_matrix = None
         self.state_vector = None
         
-
     def set_index(self, minor, major=-1):
         if major >= 0:
             self.index = (major, minor)
         else:
             self.index = minor
+
+    def apply_operation(self, operation):
+        from photon_weave.operation.polarization_operations import (
+            PolarizationOperationType
+        )
+        match operation.operation:
+            case PolarizationOperationType.I:
+                return 
+            case PolarizationOperationType.X:
+                if self.label is not None:
+                    match self.label:
+                        case PolarizationLabel.H:
+                            self.label = PolarizationLabel.V
+                        case PolarizationLabel.V:
+                            self.label = PolarizationLabel.H
+                        case PolarizationLabel.R:
+                            self.label = PolarizationLabel.L
+                        case PolarizationLabel.L:
+                            self.label = PolarizationLabel.R
+        min_expansion_level = operation.expansion_level_required(self)
+        while self.expansion_level < min_expansion_level:
+            self.expand()
+        operation.compute_operator()
+        self._execute_apply(operation)
+
+    def _execute_apply(self, operation):
+        """
+        Consider GPU
+        """
+        if self.expansion_level == 1:
+            self.state_vector = operation.operator @ self.state_vector
+        elif self.expansion_level == 2:
+            self.density_matrix = operation.operator @ self.density_matrix
+            self.density_matrix @= operation.operator.conj().T
+

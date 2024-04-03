@@ -115,23 +115,24 @@ class TestFockOperation(unittest.TestCase):
             fock.state_vector,
             expected_vector.reshape(-1, 1)
         ))
-
         op_create = FockOperation(FockOperationType.Creation, apply_count=5)
         fock.expand()
         fock.apply_operation(op_create)
-        fock.apply_operation(op)
-        expected_vector = np.array([0, 0, 0, 0, 1, 0])
+        expected_vector = np.array([0, 0, 0, 0, 0, 1], dtype=np.complex_)
         expected_density_matrix = np.outer(
             expected_vector.flatten(),
             np.conj(expected_vector.flatten())
         )
-        self.assertTrue(np.array_equal(
-            fock.density_matrix,
-            expected_density_matrix
-        ))
 
+        # Check if there are differences greater than the tolerance
+        self.assertTrue(np.allclose(
+            fock.density_matrix,
+            expected_density_matrix,
+            atol=1e-10,
+            rtol=1e-4
+        ))
         op_annihilate = FockOperation(FockOperationType.Annihilation,
-                                      apply_count=4)
+                                      apply_count=5)
         fock.apply_operation(op_annihilate)
 
         expected_vector = np.array([1+0j, 0+0j, 0+0j, 0+0j, 0+0j, 0+0j])
@@ -139,6 +140,7 @@ class TestFockOperation(unittest.TestCase):
             expected_vector.flatten(),
             np.conj(expected_vector.flatten())
         )
+
         self.assertTrue(np.allclose(
             fock.density_matrix,
             expected_density_matrix

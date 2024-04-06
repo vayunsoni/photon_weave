@@ -36,7 +36,10 @@ def ensure_equal_expansion(func):
 
 def ensure_composite(func):
     def wrapper(self, *states, **kwargs):
-        composite_envelopes = [s.composite_envelope for s in states if s.composite_envelope is not None]
+        composite_envelopes = [
+            s.composite_envelope for s in states
+            if s.composite_envelope is not None]
+        composite_envelopes = list(set(composite_envelopes))
         if len(composite_envelopes) == 0:
             new_envelope = CompositeEnvelope(*states)
         elif len(composite_envelopes) == 1:
@@ -44,7 +47,8 @@ def ensure_composite(func):
             for state in states:
                 existing_envelope.add_envelope(state)
         else:
-            new_envelope = CompositeEnvelope(*states)
+            new_envelope = CompositeEnvelope(*states
+)
         return func(self, *states, **kwargs)
     return wrapper
 
@@ -66,6 +70,7 @@ class CompositeOperation():
             case CompositeOperationType.NonPolarizingBeamSplit:
                 self._operate_non_polarizing_beam_split(*args)
 
+
     @ensure_composite
     def _operate_non_polarizing_beam_split(self, *args, **kwargs):
         if len(args) != 2:
@@ -77,21 +82,29 @@ class CompositeOperation():
         dim1 = args[0].fock.dimensions
         dim2 = args[1].fock.dimensions
         self.compute_operator(dimensions=(dim1, dim2))
-        ce.apply_operator(self, args[0].fock, args[1].fock)
+        ce._apply_operator(self, args[0].fock, args[1].fock)
         
 
     def compute_operator(self, *args, **kwargs):
         from photon_weave.operation.fock_operation import FockOperation, FockOperationType
         match self.operation:
             case CompositeOperationType.NonPolarizingBeamSplit:
+                eta = self.kwargs.get("eta", 1)  # Default to complete overlap if not provided
+                
                 fo = FockOperation(operation=FockOperationType.Identity)
                 dim1, dim2 = kwargs["dimensions"]
                 a = fo._create(dim1)
                 a_dagger = fo._destroy(dim1)
                 b = fo._create(dim2)
                 b_dagger = fo._destroy(dim2)
-                print(self.kwargs["theta"])
-                self.operator = np.kron(a_dagger, b) + np.kron(a, b_dagger)
-                self.operator = self.kwargs["theta"] * self.operator
-                self.operator = expm(1j* self.operator)
+                
+                # Adjusting the operator with the eta parameter
+                self.operator = np.sqrt(eta) * (np.kron(a_dagger, b) + np.kron(a, b_dagger))
+                # If necessary, include (1 - eta) terms to model distinguishable paths
+                # This part is highly dependent on the physical interpretation of eta
+                # and the specifics of the HOM effect you wish to model
+                
+                theta = self.kwargs.get("theta", 0)  # Default to 0 if not provided
+                self.operator = theta * self.operator
+                self.operator = expm(1j * self.operator)
 

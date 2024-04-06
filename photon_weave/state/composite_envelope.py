@@ -8,25 +8,49 @@ class StateNotInThisCompositeEnvelopeException(Exception):
     pass
 
 
+def redirect_if_consumed(method):
+    def wrapper(self, *args, **kwargs):
+        # Check if the object has been consumed by another CompositeEnvelope
+        if hasattr(self, '_consumed_by') and self._consumed_by:
+            # Redirect the method call to the new CompositeEnvelope
+            return getattr(self._consumed_by, method.__name__)(*args, **kwargs)
+        else:
+            return method(self, *args, **kwargs)
+    return wrapper
+
+
 class CompositeEnvelope:
     def __init__(self, *envelopes):
         from photon_weave.state.envelope import Envelope
         self.envelopes = []
         self.states = []
+        # If the state is consumed by another composite state, the reference is stored here
+        self._consumed_by = None
+        seen_composite_envelopes = set()
         for e in envelopes:
             if isinstance(e, CompositeEnvelope):
-                self.envelopes.extend(e.envelopes)
-                for env in e.envelopes:
-                    env.composite_envelope = self
-                for state in e.states:
-                    self.states.append(state)
-                del(e)
+                if e not in seen_composite_envelopes:
+                    self.envelopes.extend(e.envelopes)
+                    self.states.extend(e.states)
+                    seen_composite_envelopes.add(e)
             elif isinstance(e, Envelope):
-                self.envelopes.append(e)
+                if (not e.composite_envelope is None and
+                    e.composite_envelope not in seen_composite_envelopes):
+                    self.states.extend(e.composite_envelope.states)
+                    seen_composite_envelopes.add(e.composite_envelope)
+                    self.envelopes.extend(e.composite_envelope.envelopes)
+                else:
+                    self.envelopes.append(e)
+        for ce in seen_composite_envelopes:
+            ce._consumed_by = self
+            ce.states = []
+
+        self.envelopes = list(set(self.envelopes))
         self.update_indices() 
-        for e in envelopes:
+        for e in self.envelopes:
             e.composite_envelope = self
 
+    @redirect_if_consumed
     def combine(self, *states):
         """
         Combines states into a product space
@@ -130,15 +154,18 @@ class CompositeEnvelope:
             del self.states[index]
         self.update_indices()
 
+    @redirect_if_consumed
     def update_indices(self):
         for major, _ in enumerate(self.states):
             for minor, state in enumerate(self.states[major][1]):
                 state.set_index(minor, major)
 
+    @redirect_if_consumed
     def add_envelope(self, envelope):
         self.envelopes.append(envelope)
         envelope.composite_envelope = self
 
+    @redirect_if_consumed
     def expand(self, state):
         if state.envelope.expansion_level >= ExpansionLevel.Matrix:
             return
@@ -154,18 +181,16 @@ class CompositeEnvelope:
         for s in self.states[state_index][1]:
             s.expansion_level = ExpansionLevel.Matrix
 
+    @redirect_if_consumed
     def _find_composite_state_index(self, *states):
         composite_state_index = None
         for i, (_, states_group) in enumerate(self.states):
             if all(s in states_group for s in states):
                 composite_state_index = i
                 return composite_state_index
+        return None
 
-        if composite_state_index is None:
-            raise ValueError("Specified states do not match any composite state.")
-
-        
-
+    @redirect_if_consumed
     def rearange(self, *ordered_states):
         """
         Uses the swap operation to rearange the states, according to the given order
@@ -197,6 +222,7 @@ class CompositeEnvelope:
                 new_order[old_idx] = tmp
         self._reorder_states(new_order, composite_state_index)
 
+    @redirect_if_consumed
     def _reorder_states(self, order, state_index):
         # Calculate the total dimension of the composite system
         total_dim = np.prod([s.dimensions for s in self.states[state_index][1]])
@@ -229,17 +255,34 @@ class CompositeEnvelope:
             self.states[state_index][0] = permutation_matrix @ self.states[state_index][0] @ permutation_matrix.conj().T
             self.states[state_index][1] = order
 
+    @redirect_if_consumed
     def apply_operation(self, operation, *states):
         from photon_weave.operation.fock_operation import FockOperation
+        from photon_weave.operation.polarization_operations import PolarizationOperation
+        from photon_weave.operation.composite_operation import CompositeOperation
+        from photon_weave.state.envelope import Envelope
+        from photon_weave.state.composite_envelope import CompositeEnvelope
+        csi = self._find_composite_state_index(states[0])
+        if (isinstance(operation, FockOperation) or
+            isinstance(operation, PolarizationOperation)):
+            if csi is None:
+                states[0].apply_operation(operation)
+            else:
+                self._apply_operator(operation, *states)
+        elif isinstance(operation, CompositeOperation):
+            operation.operate(*states)
 
-    def apply_operator(self, operation, *states):
+    @redirect_if_consumed
+    def _apply_operator(self, operation, *states):
         """
         Assumes the spaces are correctly ordered
         """
         from photon_weave.state.fock import Fock
         from photon_weave.state.polarization import Polarization
-        from photon_weave.operation.fock_operation import FockOperation, FockOperationType
-        from photon_weave.operation.polarization_operations import PolarizationOperation, PolarizationOperationType
+        from photon_weave.operation.fock_operation import (
+            FockOperation, FockOperationType)
+        from photon_weave.operation.polarization_operations import (
+            PolarizationOperation, PolarizationOperationType)
         csi = self._find_composite_state_index(*states)
         composite_operator = 1
         skip_count = 0
@@ -259,9 +302,10 @@ class CompositeEnvelope:
                     identity = FockOperation(FockOperationType.Identity)
                     identity.compute_operator(state.dimensions)
                     identity = identity.operator
-                elif isinstance(state, Polarization()):
-                    identity = PolarizationOperation(PolarizationOperationType.Identity)
-                    identity.compute_operator(state.dimensions)
+                elif isinstance(state, Polarization):
+                    identity = PolarizationOperation(
+                        PolarizationOperationType.I)
+                    identity.compute_operator()
                     identity = identity.operator
                 composite_operator = np.kron(
                     composite_operator,
@@ -272,4 +316,31 @@ class CompositeEnvelope:
         elif self.states[csi][1][0].expansion_level == ExpansionLevel.Matrix:
             self.states[csi][0] = composite_operator @ self.states[csi][0]
             self.states[csi][0] = self.states[csi][0] @ composite_operator.conj().T
+
+    @redirect_if_consumed
+    def measure(self, *states) -> int:
+        from photon_weave.state.envelope import Envelope
+        from photon_weave.state.polarization import Polarization
+        from photon_weave.state.fock import Fock
+        outcome = None
+        nstates = []
+        for s in states:
+            if isinstance(s, Envelope):
+                nstates.append(s)
+            elif isinstance(s, Polarization) or isinstance(s, Fock):
+                nstates.append(s.envelope)
+        states = list(set(nstates))
+        for s in states:
+            if isinstance(s, Envelope):
+                if s not in self.envelopes:
+                    raise StateNotInThisCompositeEnvelopeException()
+                if (self._find_composite_state_index(s.fock) is None and
+                    self._find_composite_state_index(s.polarization) is None):
+                    outcome = s.measure()
+                    self.envelopes.remove(s)
+                    s.composite_envelope = None
+                else:
+                    print("else")
                     
+        return outcome 
+

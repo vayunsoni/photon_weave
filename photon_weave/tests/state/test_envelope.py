@@ -1,8 +1,11 @@
 from photon_weave.state.envelope import Envelope
 from photon_weave.state.fock import Fock
-from photon_weave.state.polarization import Polarization, PolarizationLabel
-
+from photon_weave.state.polarization import (
+    Polarization, PolarizationLabel)
+from photon_weave.operation.fock_operation import (
+    FockOperation, FockOperationType)
 import numpy as np
+import random
 import unittest
 
 class TestFock(unittest.TestCase):
@@ -46,6 +49,63 @@ class TestFock(unittest.TestCase):
         envelope.fock.expand()
         envelope.polarization.expand()
 
+
+    def test_measure_envelope_fock(self):
+        """
+        Test measurement, where the fock state is not
+        combined into an envelope or composite envelope.
+        """
+        r = random.randint(1, 20)
+        env = Envelope()
+        op = FockOperation(FockOperationType.Creation, apply_count=r)
+        env.apply_operation(op)
+        outcome = env.measure()
+        self.assertEqual(outcome, r)
+        self.assertEqual(env.measured, True)
+        self.assertEqual(env.fock.measured, True)
+        self.assertEqual(env.fock.label, None)
+
+        env = Envelope()
+        env.fock.expand()
+        env.apply_operation(op)
+        outcome = env.measure()
+        self.assertEqual(outcome, r)
+        self.assertEqual(env.measured, True)
+        self.assertEqual(env.fock.measured, True)
+        self.assertEqual(env.fock.state_vector, None)
+
+        env = Envelope()
+        env.fock.expand()
+        env.fock.expand()
+        env.apply_operation(op)
+        outcome = env.measure()
+        self.assertEqual(outcome, r)
+        self.assertEqual(env.measured, True)
+        self.assertEqual(env.fock.measured, True)
+        self.assertEqual(env.fock.density_matrix, None)
+
+    def test_envelope_measurement(self):
+        """
+        Test measurement, when state is combined into an envelope
+        """
+        r = random.randint(1,10)
+        env = Envelope()
+        op = FockOperation(FockOperationType.Creation, apply_count=r)
+        env.apply_operation(op)
+        env.combine()
+        outcome = env.measure()
+        self.assertEqual(outcome, r)
+        self.assertEqual(env.measured, True)
+        self.assertEqual(env.composite_vector, None)
+        self.assertEqual(env.composite_matrix, None)
+        self.assertEqual(env.polarization.measured, True)
+        self.assertEqual(env.polarization.label, None)
+        self.assertEqual(env.polarization.state_vector, None)
+        self.assertEqual(env.polarization.density_matrix, None)
+        self.assertEqual(env.fock.measured, True)
+        self.assertEqual(env.fock.label, None)
+        self.assertEqual(env.fock.state_vector, None)
+        self.assertEqual(env.fock.density_matrix, None)
 
 
 if __name__ == '__main__':

@@ -5,6 +5,11 @@ import numpy as np
 import unittest
 from photon_weave.state.fock import Fock
 from photon_weave.state.polarization import Polarization
+from photon_weave.state.envelope import Envelope
+from photon_weave.operation.fock_operation import (
+    FockOperation, FockOperationType
+)
+import random
 
 
 class TestFock(unittest.TestCase):
@@ -147,6 +152,16 @@ class TestFock(unittest.TestCase):
             fock.density_matrix,
             expected_density_matrix
         ))
+
+    def test_measurement(self):
+        r = random.randint(1,10)
+        env = Envelope()
+        op = FockOperation(FockOperationType.Creation, apply_count=r)
+        env.apply_operation(op)
+        outcome = env.fock.measure()
+        self.assertEqual(outcome, r)
+        self.assertEqual(env.measured, True)
+
 
 
 # This allows the tests to be run with the script via the command line.

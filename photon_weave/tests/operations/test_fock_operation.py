@@ -81,7 +81,7 @@ class TestFockOperation(unittest.TestCase):
         ce = CompositeEnvelope(env1, env2)
         ce.combine(env1.fock, env2.fock)
         op = FockOperation(operation=FockOperationType.Creation)
-        ce.apply_operator(op, env1.fock)
+        ce._apply_operator(op, env1.fock)
         self.assertTrue(np.array_equal(
             ce.states[0][0],
             [[0], [0], [1], [0]]

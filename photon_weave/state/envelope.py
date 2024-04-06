@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Optional
 from photon_weave.operation.generic_operation import GenericOperation
 import numpy as np
+
+
 class Envelope:
     def __init__(self, fock: Optional['Fock'] = None,
                  polarization: Optional['Polarization'] = None):
@@ -23,8 +25,11 @@ class Envelope:
         self.composite_vector = None
         self.composite_matrix = None
         self.composite_envelope = None
-        
+        self.measured = False
+
     def __repr__(self):
+        if self.measured:
+            return "Envelope already Measured"
         if (self.composite_matrix is None and
             self.composite_vector is None):
             if (self.fock.expansion_level == 0 and
@@ -39,7 +44,7 @@ class Envelope:
         elif self.composite_matrix is not None:
             formatted_matrix = "\n".join(["\t".join([f"({num.real:.2f} {'+' if num.imag >= 0 else '-'} {abs(num.imag):.2f}j)" for num in row]) for row in self.composite_matrix])
             return f"{formatted_matrix}"
-            
+
     def combine(self):
         """
         Combines the fock and polarization into one matrix
@@ -96,18 +101,25 @@ class Envelope:
                 fock_index = self.fock.index
                 polarization_index = self.polarization.index
                 operation.compute_operator(self.fock.dimensions)
-                operators = np.ones(2)
+                operators = [1,1]
                 operators[fock_index] = operation.operator
                 polarization_identity = PolarizationOperation(
-                    operation=PolarizationOperationType.Identity)
+                    operation=PolarizationOperationType.I)
+                polarization_identity.compute_operator()
                 operators[polarization_index] = polarization_identity.operator
                 operator = np.kron(*operators)
                 if self.composite_vector is not None:
                     self.composite_vector = operator @ self.composite_vector
+                    if operation.renormalize:
+                        nf = np.linalg.norm(self.composite_vector)
+                        self.composite_vector = self.composite_vector / nf
                 if self.composite_matrix is not None:
                     self.composite_matrix = operator @ self.composite_matrix
                     op_dagger = operator.conj().T
                     self.composite_matrix = self.composite_matrix @ op_dagger
+                    if operation.renormalize:
+                        nf = np.linalg.norm(self.composite_matrix)
+                        self.composite_matrix = self.composite_matrix / nf
         if isinstance(operation, PolarizationOperation):
             if (self.composite_vector is None and
                 self.composite_matrix is None):
@@ -130,7 +142,58 @@ class Envelope:
                     op_dagger = operator.conj().T
                     self.composite_matrix = self.composite_matrix @ op_dagger
 
+    def measure(self, non_destructive=False):
+        """
+        Measures the number of particles in the space
+        """
+        print(self.fock.index)
+        if self.measured:
+            raise EnvelopeAlreadyMeasuredException()
+        outcome = None
+        if self.composite_vector is not None:
+            dim = [0,0]
+            dim[self.fock.index] = int(self.fock.dimensions)
+            dim[self.polarization.index] = 2
+            matrix_form = self.composite_vector.reshape(dim[0], dim[1])
+            probabilities = np.sum(np.abs(matrix_form)**2,
+                                   axis=self.polarization.index)
+            assert np.isclose(np.sum(probabilities), 1.0), "Probabilities do not sum to 1."
+            axis = np.arange(dim[self.fock.index])
+            outcome = np.random.choice(axis, p=probabilities)
+        elif self.composite_matrix is not None:
+            dim = [0,0]
+            dim[self.fock.index] = int(self.fock.dimensions)
+            dim[self.polarization.index] = 2
+            tf = self.composite_matrix.reshape(
+                dim[0], dim[1], dim[0], dim[1])
+            if self.fock.index == 0:
+                tf = np.trace(tf, axis1=1, axis2=3)
+            else:
+                tf = np.trace(tf, axis1=0, axis2=2)
+            probabilities = np.abs(np.diagonal(tf))
+            axis = np.arange(dim[self.fock.index])
+            outcome = np.random.choice(axis, p=probabilities)
+        elif isinstance(self.fock.index, (list, tuple)) and len(self.fock.index)==2:
+            outcome = self.composite_envelope.measure()
+        else:
+            outcome = self.fock.measure(non_destructive)
+        if not non_destructive:
+            self._set_measured()
+        if self.composite_envelope is not None:
+            self.composite_envelope.envelopes.remove(self)
+            self.composite_envelope = None
+        return outcome
+
+    def _set_measured(self):
+        self.measured = True
+        self.fock._set_measured()
+        self.polarization._set_measured()
+        self.composite_vector = None
+        self.composite_matrix = None
 
 
 class EnvelopeAssignedException(Exception):
+    pass
+
+class EnvelopeAlreadyMeasuredException(Exception):
     pass

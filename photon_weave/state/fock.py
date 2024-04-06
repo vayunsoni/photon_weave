@@ -20,6 +20,7 @@ class Fock:
         self.density_matrix = None
         self.envelope = envelope
         self.expansion_level = ExpansionLevel.Label
+        self.measured = False
 
     def __repr__(self):
         if self.label is not None:
@@ -201,3 +202,33 @@ class Fock:
             self.index = (major, minor)
         else:
             self.index = minor
+
+
+    def measure(self, non_destructive=False):
+        if self.measured:
+            raise FockAlreadyMeasuredException()
+        outcome = None
+        match self.expansion_level:
+            case ExpansionLevel.Label:
+                outcome = self.label
+            case ExpansionLevel.Vector:
+                probabilities = np.abs(self.state_vector.flatten())**2
+                outcome = np.random.choice(len(probabilities), p=probabilities)
+            case ExpansionLevel.Matrix:
+                probabilities = np.real(np.diag(self.density_matrix))
+                outcome = np.random.choice(len(probabilities), p=probabilities)
+        self._set_measured()
+        self.envelope._set_measured()
+        return outcome
+
+    def _set_measured(self):
+        self.measured = True
+        self.label = None
+        self.expansion_level = None
+        self.state_vector = None
+        self.density_matrix = None
+
+
+
+class FockAlreadyMeasuredException(Exception):
+    pass

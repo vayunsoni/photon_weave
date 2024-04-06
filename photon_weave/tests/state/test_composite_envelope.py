@@ -3,6 +3,7 @@ Tests for the Fock class
 """
 import numpy as np
 import unittest
+from numpy.testing import assert_array_equal
 from photon_weave.state.envelope import Envelope
 from photon_weave.state.composite_envelope import (
     CompositeEnvelope,
@@ -16,7 +17,7 @@ from photon_weave.state.polarization import (
 from photon_weave.operation.fock_operation import (
     FockOperation, FockOperationType
 )
-
+import random
 
 class TestFock(unittest.TestCase):
     def test_initiation_from_envelopes(self):
@@ -169,7 +170,6 @@ class TestFock(unittest.TestCase):
             ce = CompositeEnvelope(env1, env2)
             ce.combine(env1, env2)
 
-
     def test_composite_expansion(self):
         env1 = Envelope()
         env2 = Envelope()
@@ -246,10 +246,206 @@ class TestFock(unittest.TestCase):
             [env1.polarization, env1.fock, env2.fock]
         )
 
-    def test_fock_operations_on_composite_envelope(self):
+    def test_fock_operations_on_composite_envelope_first(self):
+        # Applying Fock operations to the composite envelope
         env1 = Envelope()
         env2 = Envelope()
         ce = CompositeEnvelope(env1, env2)
         op = FockOperation(FockOperationType.Creation)
-        
+        # Applying Fock operation to the fock state
+        ce.apply_operation(op, env1.fock)
+        self.assertEqual(env1.fock.label, 1)
+        self.assertEqual(env1.polarization.label, PolarizationLabel.H)
+        # Applying Fock operation to the envelope
+        # It should be correctly routed
         ce.apply_operation(op, env1)
+        self.assertEqual(env1.fock.label, 2)
+        self.assertEqual(env1.polarization.label, PolarizationLabel.H)
+
+        # Combining the envelope
+        e1 = Envelope()
+        e2 = Envelope()
+        c = CompositeEnvelope(e1, e2)
+        e1.combine()
+        op = FockOperation(FockOperationType.Creation)
+        c.apply_operation(op, e1)
+        expected_vector = np.kron(
+            [[0], [1], [0]],
+            [[1], [0]]
+        )
+        self.assertTrue(np.array_equal(
+            e1.composite_vector,
+            expected_vector
+        ))
+        # Combining the composite envelope
+        e1 = Envelope()
+        e2 = Envelope()
+        c = CompositeEnvelope(e1, e2)
+        c.combine(e1.fock, e2.fock, e1.polarization)
+        op = FockOperation(FockOperationType.Creation)
+        c.apply_operation(op, e1.fock)
+
+        expected_vector = [[0], [1], [0]]
+        expected_vector = np.kron(
+            expected_vector,
+            [[1], [0], [0]])
+        expected_vector = np.kron(
+            expected_vector,
+            [[1], [0]])
+        assert_array_equal(
+            c.states[0][0],
+            expected_vector
+        )
+
+    def test_composite_nested(self):
+        env1 = Envelope()
+        env2 = Envelope()
+
+        ce1 = CompositeEnvelope(env1, env2)
+        ce2 = CompositeEnvelope(env1, env2)
+        self.assertEqual(ce1.states,[])
+        try:
+            # Trigger combination of states in ce1
+            # eventhough the states are in ce2
+            ce1.combine(env1.fock, env2.fock)
+        except Exception as _:
+            self.fail("ce1.combine() should work")
+
+
+    def test_measurement_fock(self):
+        """
+        Measurement test of uncombined fock state
+        """
+        r = random.randint(1, 10)
+        env1 = Envelope()
+        env2 = Envelope()
+        c = CompositeEnvelope(env2, env1)
+        op = FockOperation(FockOperationType.Creation, apply_count=r)
+        c.apply_operation(op, env1)
+
+        outcome = c.measure(env1)
+        self.assertEqual(outcome, r)
+        self.assertFalse(env1 in c.envelopes)
+        self.assertEqual(env1.measured, True)
+        self.assertEqual(env1.composite_envelope, None)
+        self.assertEqual(env1.composite_vector, None)
+        self.assertEqual(env1.composite_matrix, None)
+        self.assertEqual(env1.fock.measured, True)
+        self.assertEqual(env1.fock.label, None)
+        self.assertEqual(env1.fock.state_vector, None)
+        self.assertEqual(env1.fock.density_matrix, None)
+        self.assertEqual(env1.polarization.measured, True)
+        self.assertEqual(env1.polarization.label, None)
+        self.assertEqual(env1.polarization.state_vector, None)
+        self.assertEqual(env1.polarization.density_matrix, None)
+
+    def test_measurement_envelope(self):
+        """
+        Measurement test
+        State combined in envelope
+        """
+        r = random.randint(1, 4)
+        env1 = Envelope()
+        env2 = Envelope()
+        c = CompositeEnvelope(env2, env1)
+        env1.fock.dimensions = 5
+        env1.combine()
+        op = FockOperation(FockOperationType.Creation, apply_count=r)
+        c.apply_operation(op, env1)
+
+        outcome = c.measure(env1)
+        self.assertEqual(outcome, r)
+        self.assertFalse(env1 in c.envelopes)
+        self.assertEqual(env1.measured, True)
+        self.assertEqual(env1.composite_envelope, None)
+        self.assertEqual(env1.composite_vector, None)
+        self.assertEqual(env1.composite_matrix, None)
+        self.assertEqual(env1.fock.measured, True)
+        self.assertEqual(env1.fock.label, None)
+        self.assertEqual(env1.fock.state_vector, None)
+        self.assertEqual(env1.fock.density_matrix, None)
+        self.assertEqual(env1.polarization.measured, True)
+        self.assertEqual(env1.polarization.label, None)
+        self.assertEqual(env1.polarization.state_vector, None)
+        self.assertEqual(env1.polarization.density_matrix, None)
+
+
+    def test_measurement_envelope_matrix_form(self):
+        """
+        Measurement test
+        State combined in envelope
+        """
+        r = random.randint(1, 4)
+        env1 = Envelope()
+        env2 = Envelope()
+        c = CompositeEnvelope(env2, env1)
+        env1.fock.dimensions = 5
+        env1.fock.expand()
+        env1.fock.expand()
+        env1.combine()
+        op = FockOperation(FockOperationType.Creation, apply_count=r)
+        c.apply_operation(op, env1)
+        outcome = c.measure(env1)
+        self.assertEqual(outcome, r)
+        self.assertFalse(env1 in c.envelopes)
+        self.assertEqual(env1.measured, True)
+        self.assertEqual(env1.composite_envelope, None)
+        self.assertEqual(env1.composite_vector, None)
+        self.assertEqual(env1.composite_matrix, None)
+        self.assertEqual(env1.fock.measured, True)
+        self.assertEqual(env1.fock.label, None)
+        self.assertEqual(env1.fock.state_vector, None)
+        self.assertEqual(env1.fock.density_matrix, None)
+        self.assertEqual(env1.polarization.measured, True)
+        self.assertEqual(env1.polarization.label, None)
+        self.assertEqual(env1.polarization.state_vector, None)
+        self.assertEqual(env1.polarization.density_matrix, None)
+
+    def test_measurement_envelope_matrix_form(self):
+        """
+        Measurement test
+        State combined in envelope
+        We try to measure the envelope
+        """
+        r = random.randint(1, 4)
+        env1 = Envelope()
+        env2 = Envelope()
+        c = CompositeEnvelope(env2, env1)
+        env1.fock.dimensions = 5
+        env1.fock.expand()
+        env1.fock.expand()
+        env1.combine()
+        op = FockOperation(FockOperationType.Creation, apply_count=r)
+        c.apply_operation(op, env1)
+        outcome = env1.measure()
+        self.assertEqual(outcome, r)
+        self.assertFalse(env1 in c.envelopes)
+        self.assertEqual(env1.measured, True)
+        self.assertEqual(env1.composite_envelope, None)
+        self.assertEqual(env1.composite_vector, None)
+        self.assertEqual(env1.composite_matrix, None)
+        self.assertEqual(env1.fock.measured, True)
+        self.assertEqual(env1.fock.label, None)
+        self.assertEqual(env1.fock.state_vector, None)
+        self.assertEqual(env1.fock.density_matrix, None)
+        self.assertEqual(env1.polarization.measured, True)
+        self.assertEqual(env1.polarization.label, None)
+        self.assertEqual(env1.polarization.state_vector, None)
+        self.assertEqual(env1.polarization.density_matrix, None)
+
+
+    def test_measurement_composite_combine_vector(self):
+        """
+        Verious tests of measurement when
+        envelope state is combined in various composite
+        product spaces in CompositeEvnelope
+        """
+        r = random.randint(1, 4)
+        env1 = Envelope()
+        env2 = Envelope()
+        op = FockOperation(FockOperationType.Creation, apply_count=r)
+        c = CompositeEnvelope(env1, env2)
+        c.apply_operation(op, env1)
+        env1.fock.dimensions = 5
+        c.combine(env1.fock, env2.fock)
+        print(c.states[0][0])        

@@ -170,14 +170,14 @@ class CompositeEnvelope:
         if state.envelope.expansion_level >= ExpansionLevel.Matrix:
             return
         state_index = None
-        for i,s in enumerate(self.states):
+        for i, s in enumerate(self.states):
             if state in s[1]:
                 state_index = i
                 break
-        self.states[state_index][0] = np.outer( 
-            self.states[state_index][0].flatten(), 
-            np.conj(self.states[state_index][0].flatten()), 
-        ) 
+        self.states[state_index][0] = np.outer(
+            self.states[state_index][0].flatten(),
+            np.conj(self.states[state_index][0].flatten()),
+        )
         for s in self.states[state_index][1]:
             s.expansion_level = ExpansionLevel.Matrix
 
@@ -340,7 +340,98 @@ class CompositeEnvelope:
                     self.envelopes.remove(s)
                     s.composite_envelope = None
                 else:
-                    print("else")
-                    
-        return outcome 
+                    pol = s.polarization.index
+                    fock = s.fock.index
+                    # measure fock state
+                    cutoffs = [s.dimensions for s in self.states[fock[0]][1]]
+                    probabilities = []
+                    projection_states = []
+                    if s.fock.expansion_level == ExpansionLevel.Vector:
+                        before = np.eye(int(np.prod(cutoffs[:fock[1]])))
+                        after = np.eye(int(np.prod(cutoffs[fock[1]+1:])))
+                        for num_particles in range(s.fock.dimensions):
+                            projection = np.zeros(
+                                (
+                                    s.fock.dimensions,
+                                    s.fock.dimensions
+                                )
+                            )
+                            projection[num_particles, num_particles] = 1
+                            full_projection = np.kron(
+                                np.kron(before, projection),
+                                after)
+                            projected_state = full_projection @ self.states[fock[0]][0]
+                            prob = np.linalg.norm(projected_state)**2
+                            probabilities.append(prob)
+                            projection_states.append(projected_state)
+                    outcome = np.random.choice(
+                        range(s.fock.dimensions),
+                        p=probabilities)
+                    self.states[fock[0]][0] = projection_states[outcome]
+                    self.states[fock[0]][0] /= np.linalg.norm(projection_states[outcome])
+                    # Removing the space from the product space
+                    self._trace_out(s.fock)
+                    s._set_measured()
+        self.update_indices()
+        return outcome
 
+    def _trace_out(self, state):
+        space_index, subsystem_index = state.index
+        dims = [s.dimensions for s in self.states[space_index][1]]
+        if len(self.states[space_index][1]) < 2:
+            return
+        if state.expansion_level < ExpansionLevel.Matrix:
+            self.expand(state)
+        n = len(dims)
+        letters = "bcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        rho = self.states[space_index][0]
+
+        input_str = ""
+        output_str = ""
+        reshape_dims = (*dims, *dims)
+        c_id = 0
+        for i in range(len(reshape_dims)):
+            if i%len(dims) == subsystem_index:
+                input_str+="a"
+            else:
+                char = letters[c_id]
+                input_str+=char
+                output_str+=char
+                c_id += 1
+                
+
+        einsum_str = f"{input_str}->{output_str}"
+
+        rho = rho.reshape(reshape_dims)
+        rho = np.einsum(einsum_str, rho)
+        new_dims = np.prod(dims) // state.dimensions
+        rho = rho.reshape(new_dims, new_dims)
+        self.states[space_index][0]=rho
+
+        self.contract(state)
+        # Update system information post trace-out
+        del self.states[space_index][1][subsystem_index]
+        
+
+    @redirect_if_consumed
+    def contract(self, state):
+        if state.expansion_level < ExpansionLevel.Matrix:
+            return
+        space_index = state.index[0]
+        # Assuming self.states[space_index] correctly references the density matrix
+        rho = self.states[space_index][0]
+        # Square the density matrix before taking the trace
+        tr_rho_squared = np.trace(np.dot(rho, rho))
+        if not np.isclose(tr_rho_squared, 1.0):
+            return
+        eigenvalues, eigenvectors = np.linalg.eigh(rho)
+        # Assuming you want to keep the eigenvector corresponding to the largest eigenvalue
+        # And assuming the structure of self.states allows direct replacement
+        vector = eigenvectors[:, np.argmax(eigenvalues)].reshape(-1, 1)
+        # Update the state with the column vector
+        self.states[space_index][0] = vector
+        
+        # This line seems to attempt to update expansion_level for multiple states,
+        # Ensure the structure of self.states[space_index][1] (if it exists) supports iteration like this
+        for s in self.states[space_index][1]:
+            s.expansion_level = ExpansionLevel.Vector

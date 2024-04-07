@@ -227,6 +227,8 @@ class Fock:
         self.expansion_level = None
         self.state_vector = None
         self.density_matrix = None
+        self.index = None
+        self.envelope = None
 
 
 

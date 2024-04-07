@@ -146,7 +146,6 @@ class Envelope:
         """
         Measures the number of particles in the space
         """
-        print(self.fock.index)
         if self.measured:
             raise EnvelopeAlreadyMeasuredException()
         outcome = None
@@ -179,17 +178,18 @@ class Envelope:
             outcome = self.fock.measure(non_destructive)
         if not non_destructive:
             self._set_measured()
-        if self.composite_envelope is not None:
-            self.composite_envelope.envelopes.remove(self)
-            self.composite_envelope = None
         return outcome
 
     def _set_measured(self):
+        if self.composite_envelope is not None:
+            self.composite_envelope.envelopes.remove(self)
+            self.composite_envelope = None
         self.measured = True
         self.fock._set_measured()
         self.polarization._set_measured()
         self.composite_vector = None
         self.composite_matrix = None
+        self.composite_envelope = None
 
 
 class EnvelopeAssignedException(Exception):

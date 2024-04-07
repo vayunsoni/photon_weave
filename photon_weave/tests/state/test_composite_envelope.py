@@ -441,11 +441,103 @@ class TestFock(unittest.TestCase):
         product spaces in CompositeEvnelope
         """
         r = random.randint(1, 4)
+        r = 2
         env1 = Envelope()
         env2 = Envelope()
+        env3 = Envelope()
         op = FockOperation(FockOperationType.Creation, apply_count=r)
-        c = CompositeEnvelope(env1, env2)
+        c = CompositeEnvelope(env1, env2, env3)
         c.apply_operation(op, env1)
-        env1.fock.dimensions = 5
+        env1.fock.dimensions = 3
+        env2.fock.dimensions = 3
+        env3.fock.dimensions = 3
+        c.combine(env1.fock, env2.fock, env3.fock)
+        m = c.measure(env1)
+        print(r, m)
+        self.assertEqual(r, m)
+        self.assertFalse(env1.fock in c.states[0][1])
+        self.assertIsNone(env1.composite_vector)
+        self.assertIsNone(env1.composite_matrix)
+        self.assertIsNone(env1.fock.index)
+        self.assertTrue(env1.fock.measured)
+        self.assertIsNone(env1.fock.label)
+        self.assertIsNone(env1.fock.state_vector)
+        self.assertIsNone(env1.fock.density_matrix)
+        self.assertIsNone(env1.fock.envelope)
+        self.assertFalse(env1 in c.envelopes)
+        self.assertTrue(env2 in c.envelopes)
+        self.assertTrue(env3 in c.envelopes)
+        expected_vector = np.zeros(9)
+        expected_vector[0] = 1
+        expected_vector = expected_vector.reshape(-1,1)
+        self.assertTrue(np.array_equal(
+            c.states[0][0],
+            expected_vector
+        ))
+
+    def test_polarization_measurement(self):
+        """
+        If polarization is included in the same space, it should also be removed
+        """
+        env1 = Envelope()
+        env2 = Envelope()
+        c = CompositeEnvelope(env1, env2)
+        r = random.randint(1, 5)
+        op = FockOperation(FockOperationType.Creation, apply_count=r)
+        c.apply_operation(op, env1)
+        c.combine(env1.polarization, env1.fock, env2.fock)
+        print(c.states)
+
+    def test_measurement_removal(self):
+        """
+        Test if the envelope is uncombined if only one state is combined
+        """
+        env1 = Envelope()
+        env2 = Envelope()
+        c = CompositeEnvelope(env1, env2)
+        r = random.randint(1, 2)
+        r = 1
+        op = FockOperation(FockOperationType.Creation, apply_count=r)
+        c.apply_operation(op, env1)
+        env1.fock.expand()
+        env2.fock.expand()
+        print(env1)
+        print(env2)
         c.combine(env1.fock, env2.fock)
-        print(c.states[0][0])        
+        print(c.states[0][0])
+
+        m = c.measure(env1)
+
+    def test_trace_out(self):
+        """
+        Testing if the traceout 
+        """
+        env1 = Envelope()
+        env2 = Envelope()
+        env3 = Envelope()
+        env1.fock.label = 1
+        env2.fock.label = 3
+        env3.fock.label = 1
+        env1.fock.dimensions = 2
+        env2.fock.dimensions = 5
+        env3.fock.dimensions = 3
+        c = CompositeEnvelope(env1, env2, env3)
+        c.combine(env2.fock, env1.fock, env3.fock)
+        self.assertEqual(
+            len(c.states[0][0]),
+            2*5*3)
+        c._trace_out(env1.fock)
+        self.assertEqual(
+            len(c.states[0][0]),
+            5*3)
+        e2 = np.array([[0],[0],[0],[1],[0]], dtype=np.float_)
+        e3 = np.array([[0],[1],[0]])
+        exp = np.kron(e2,e3)
+        x = exp - c.states[0][0]
+        self.assertTrue(np.array_equal(
+            c.states[0][0],
+            np.kron(e2,e3)
+        ))
+
+
+

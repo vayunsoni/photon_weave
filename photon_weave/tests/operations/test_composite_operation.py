@@ -88,3 +88,26 @@ class TestFockOperation(unittest.TestCase):
                 self.assertAlmostEqual(v[0], 0.7071068)
             else:
                 self.assertAlmostEqual(v[0], 0)
+
+    def test_non_polarizing_beam_splitter_fourth(self):
+        """
+        Operator needs to be applied to a combined state
+        """
+
+        e1 = Envelope()
+        e2 = Envelope()
+        e1.fock.resize(5)
+        e2.fock.resize(3)
+        create = FockOperation(FockOperationType.Creation)
+        e1.apply_operation(create)
+        c = CompositeEnvelope(e1, e2)
+        c.combine(e1.fock, e2.fock)
+        bs = CompositeOperation(CompositeOperationType.NonPolarizingBeamSplit)
+        c.apply_operation(bs, e1, e2)
+        for i, v in enumerate(c.states[0][0]):
+            if i == 1:
+                self.assertAlmostEqual(v[0], 0.7071068j)
+            elif i == 3:
+                self.assertAlmostEqual(v[0], 0.7071068)
+            else:
+                self.assertAlmostEqual(v[0], 0)

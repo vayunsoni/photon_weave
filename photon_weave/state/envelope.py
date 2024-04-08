@@ -21,6 +21,7 @@ class Envelope:
             self.polarization = Polarization(envelope=self)
         else:
             self.polarization = polarization
+            polarization.envelope = self
 
         self.composite_vector = None
         self.composite_matrix = None
@@ -142,7 +143,7 @@ class Envelope:
                     op_dagger = operator.conj().T
                     self.composite_matrix = self.composite_matrix @ op_dagger
 
-    def measure(self, non_destructive=False):
+    def measure(self, non_destructive=False, remove_composite=True):
         """
         Measures the number of particles in the space
         """
@@ -177,19 +178,18 @@ class Envelope:
         else:
             outcome = self.fock.measure(non_destructive)
         if not non_destructive:
-            self._set_measured()
+            self._set_measured(remove_composite)
         return outcome
 
-    def _set_measured(self):
-        if self.composite_envelope is not None:
+    def _set_measured(self, remove_composite=True):
+        if self.composite_envelope is not None and remove_composite:
             self.composite_envelope.envelopes.remove(self)
             self.composite_envelope = None
         self.measured = True
-        self.fock._set_measured()
-        self.polarization._set_measured()
         self.composite_vector = None
         self.composite_matrix = None
-        self.composite_envelope = None
+        self.fock._set_measured()
+        self.polarization._set_measured()
 
 
 class EnvelopeAssignedException(Exception):

@@ -203,32 +203,34 @@ class Fock:
         else:
             self.index = minor
 
-
-    def measure(self, non_destructive=False):
+    def measure(self, non_destructive=False, remove_composite=True, partial=False):
         if self.measured:
             raise FockAlreadyMeasuredException()
         outcome = None
-        match self.expansion_level:
-            case ExpansionLevel.Label:
-                outcome = self.label
-            case ExpansionLevel.Vector:
-                probabilities = np.abs(self.state_vector.flatten())**2
-                outcome = np.random.choice(len(probabilities), p=probabilities)
-            case ExpansionLevel.Matrix:
-                probabilities = np.real(np.diag(self.density_matrix))
-                outcome = np.random.choice(len(probabilities), p=probabilities)
+        if isinstance(self.index, int):
+            return self.envelope.measure(remove_composite=remove_composite)
+        else:
+            match self.expansion_level:
+                case ExpansionLevel.Label:
+                    outcome = self.label
+                case ExpansionLevel.Vector:
+                    probabilities = np.abs(self.state_vector.flatten())**2
+                    outcome = np.random.choice(len(probabilities), p=probabilities)
+                case ExpansionLevel.Matrix:
+                    probabilities = np.real(np.diag(self.density_matrix))
+                    outcome = np.random.choice(len(probabilities), p=probabilities)
+        if not partial:
+            self.envelope._set_measured(remove_composite=remove_composite)
         self._set_measured()
-        self.envelope._set_measured()
         return outcome
 
-    def _set_measured(self):
+    def _set_measured(self, **kwargs):
         self.measured = True
         self.label = None
         self.expansion_level = None
         self.state_vector = None
         self.density_matrix = None
         self.index = None
-        self.envelope = None
 
 
 

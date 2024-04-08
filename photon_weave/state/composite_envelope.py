@@ -57,6 +57,11 @@ class CompositeEnvelope:
         """
         from photon_weave.state.fock import Fock
         from photon_weave.state.polarization import Polarization
+        # Check if states are already combined
+        for _, obj_list in self.states:
+            if all(target in obj_list for target in states):
+                return
+
         for s in states:
             if not (isinstance(s, Fock) or isinstance(s, Polarization)):
                 raise FockOrPolarizationExpectedException()
@@ -66,7 +71,7 @@ class CompositeEnvelope:
                 included_states.append(env.polarization)
             if not any(s is state for state in included_states):
                 raise StateNotInThisCompositeEnvelopeException()
-                
+
         existing_product_states = []
         tmp = []
         for state in states:
@@ -322,58 +327,108 @@ class CompositeEnvelope:
         from photon_weave.state.envelope import Envelope
         from photon_weave.state.polarization import Polarization
         from photon_weave.state.fock import Fock
-        outcome = None
+        outcomes = []
         nstates = []
         for s in states:
             if isinstance(s, Envelope):
-                nstates.append(s)
+                nstates.append(s.fock)
+                nstates.append(s.polarization)
             elif isinstance(s, Polarization) or isinstance(s, Fock):
-                nstates.append(s.envelope)
-        states = list(set(nstates))
-        for s in states:
-            if isinstance(s, Envelope):
-                if s not in self.envelopes:
-                    raise StateNotInThisCompositeEnvelopeException()
-                if (self._find_composite_state_index(s.fock) is None and
-                    self._find_composite_state_index(s.polarization) is None):
-                    outcome = s.measure()
-                    self.envelopes.remove(s)
-                    s.composite_envelope = None
+                nstates.append(s)
+
+        for tmp, s in enumerate(nstates):
+            if s.envelope not in self.envelopes:
+                raise StateNotInThisCompositeEnvelopeException()
+            if not isinstance(s.index, tuple):
+                if isinstance(s, Polarization):
+                    s.measure(remove_composite=False, partial=True)
                 else:
-                    pol = s.polarization.index
-                    fock = s.fock.index
-                    # measure fock state
-                    cutoffs = [s.dimensions for s in self.states[fock[0]][1]]
-                    probabilities = []
-                    projection_states = []
-                    if s.fock.expansion_level == ExpansionLevel.Vector:
-                        before = np.eye(int(np.prod(cutoffs[:fock[1]])))
-                        after = np.eye(int(np.prod(cutoffs[fock[1]+1:])))
-                        for num_particles in range(s.fock.dimensions):
-                            projection = np.zeros(
-                                (
-                                    s.fock.dimensions,
-                                    s.fock.dimensions
-                                )
-                            )
-                            projection[num_particles, num_particles] = 1
-                            full_projection = np.kron(
-                                np.kron(before, projection),
-                                after)
-                            projected_state = full_projection @ self.states[fock[0]][0]
-                            prob = np.linalg.norm(projected_state)**2
-                            probabilities.append(prob)
-                            projection_states.append(projected_state)
-                    outcome = np.random.choice(
-                        range(s.fock.dimensions),
-                        p=probabilities)
-                    self.states[fock[0]][0] = projection_states[outcome]
-                    self.states[fock[0]][0] /= np.linalg.norm(projection_states[outcome])
-                    # Removing the space from the product space
-                    self._trace_out(s.fock)
-                    s._set_measured()
+                    outcomes.append(s.measure(remove_composite=False, partial=True))
+            else:
+                if isinstance(s, Polarization):
+                    if s.expansion_level == ExpansionLevel.Vector:
+                        self._measure_vector(s)
+                    else:
+                        self._measure_matrix(s)
+                else:
+                    if s.expansion_level == ExpansionLevel.Vector:
+                        outcomes.append(self._measure_vector(s))
+                    else:
+                        outcomes.append(self._measure_matrix(s))
+        for s in nstates:
+            s.envelope.composite_envelope = None
+            s.envelope._set_measured()
+            if s.envelope in self.envelopes:
+                self.envelopes.remove(s.envelope)
         self.update_indices()
-        return outcome
+        return outcomes
+
+    def _measure_vector(self, state):
+        o = None
+        if not isinstance(state.index, tuple):
+            return state.measure()
+        s_idx, subs_idx = state.index
+
+        dims = [s.dimensions for s in self.states[s_idx][1]]
+        probabilities = []
+        projection_states = []
+        before = np.eye(int(np.prod(dims[:subs_idx])))
+        after = np.eye(int(np.prod(dims[subs_idx+1:])))
+        for i in range(state.dimensions):
+            projection = np.zeros(
+                (
+                    state.dimensions,
+                    state.dimensions
+                )
+            )
+            projection[i,i] = 1
+            full_projection = np.kron(np.kron(before, projection), after)
+            projected_state = full_projection @ self.states[s_idx][0]
+            prob = np.linalg.norm(projected_state)**2
+            probabilities.append(prob)
+            projection_states.append(projected_state)
+        o = np.random.choice(
+            range(state.dimensions),
+            p=probabilities)
+        self.states[s_idx][0] = projection_states[o]
+        self.states[s_idx][0] /= np.linalg.norm(projection_states[o])
+        self._trace_out(state)
+        state._set_measured(remove_composite=False)
+        return o
+
+    def _measure_matrix(self, state):
+        o = None
+        if not isinstance(state.index, tuple):
+            return state.measure()
+        s_idx, subs_idx = state.index
+
+        dims = [s.dimensions for s in self.states[s_idx][1]]
+        probabilities = []
+        projection_states = []
+        before = np.eye(int(np.prod(dims[:subs_idx])))
+        after = np.eye(int(np.prod(dims[subs_idx+1:])))
+        rho = self.states[s_idx][0]
+        for i in range(state.dimensions):
+            projection = np.zeros(
+                (
+                    state.dimensions,
+                    state.dimensions
+                )
+            )
+            projection[i,i] = 1
+            full_projection = np.kron(np.kron(before, projection), after)
+            projected_state = full_projection @ rho @ full_projection.conj().T
+            prob = np.trace(projected_state)
+            probabilities.append(prob)
+            projection_states.append(projected_state)
+        o = np.random.choice(
+            range(state.dimensions),
+            p=probabilities)
+        self.states[s_idx][0] = projection_states[o]/probabilities[o]
+        self._trace_out(state)
+        state._set_measured(remove_composite=False)
+        return o
+        pass
 
     def _trace_out(self, state):
         space_index, subsystem_index = state.index

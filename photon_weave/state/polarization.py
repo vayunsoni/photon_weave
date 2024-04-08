@@ -112,9 +112,13 @@ class Polarization:
             self.density_matrix = operation.operator @ self.density_matrix
             self.density_matrix @= operation.operator.conj().T
 
-    def _set_measured(self):
+    def _set_measured(self, **kwargs):
         self.measured = True
         self.label = None
         self.expansion_level = None
         self.state_vector = None
         self.density_matrix = None
+
+    def measure(self, **kwargs):
+        self._set_measured()
+        return None

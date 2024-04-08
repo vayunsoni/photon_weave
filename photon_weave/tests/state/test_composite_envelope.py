@@ -324,7 +324,7 @@ class TestFock(unittest.TestCase):
         c.apply_operation(op, env1)
 
         outcome = c.measure(env1)
-        self.assertEqual(outcome, r)
+        self.assertEqual(outcome[0], r)
         self.assertFalse(env1 in c.envelopes)
         self.assertEqual(env1.measured, True)
         self.assertEqual(env1.composite_envelope, None)
@@ -352,9 +352,8 @@ class TestFock(unittest.TestCase):
         env1.combine()
         op = FockOperation(FockOperationType.Creation, apply_count=r)
         c.apply_operation(op, env1)
-
         outcome = c.measure(env1)
-        self.assertEqual(outcome, r)
+        self.assertEqual(outcome[0], r)
         self.assertFalse(env1 in c.envelopes)
         self.assertEqual(env1.measured, True)
         self.assertEqual(env1.composite_envelope, None)
@@ -453,8 +452,7 @@ class TestFock(unittest.TestCase):
         env3.fock.dimensions = 3
         c.combine(env1.fock, env2.fock, env3.fock)
         m = c.measure(env1)
-        print(r, m)
-        self.assertEqual(r, m)
+        self.assertEqual(r, m[0])
         self.assertFalse(env1.fock in c.states[0][1])
         self.assertIsNone(env1.composite_vector)
         self.assertIsNone(env1.composite_matrix)
@@ -463,7 +461,6 @@ class TestFock(unittest.TestCase):
         self.assertIsNone(env1.fock.label)
         self.assertIsNone(env1.fock.state_vector)
         self.assertIsNone(env1.fock.density_matrix)
-        self.assertIsNone(env1.fock.envelope)
         self.assertFalse(env1 in c.envelopes)
         self.assertTrue(env2 in c.envelopes)
         self.assertTrue(env3 in c.envelopes)
@@ -501,10 +498,7 @@ class TestFock(unittest.TestCase):
         c.apply_operation(op, env1)
         env1.fock.expand()
         env2.fock.expand()
-        print(env1)
-        print(env2)
         c.combine(env1.fock, env2.fock)
-        print(c.states[0][0])
 
         m = c.measure(env1)
 
@@ -540,4 +534,39 @@ class TestFock(unittest.TestCase):
         ))
 
 
+    def test_automatic_polarization_measurement(self):
+        """
+        Test the automatic measurement of polarization
+        when fock state is measured
+        """
 
+        env1 = Envelope(polarization=Polarization(PolarizationLabel.V))
+        env2 = Envelope()
+        c = CompositeEnvelope(env1, env2)
+        c.combine(env1.polarization, env2.fock, env2.polarization)
+        m = c.measure(env1)
+        self.assertEqual(m[0], 0)
+        self.assertIsNone(env1.polarization.label)
+        self.assertIsNone(env1.polarization.state_vector)
+        self.assertIsNone(env1.polarization.density_matrix)
+        self.assertIsNone(env1.fock.label)
+        self.assertIsNone(env1.fock.state_vector)
+        self.assertIsNone(env1.fock.density_matrix)
+        self.assertIsNone(env1.composite_envelope)
+        self.assertFalse(env1.polarization in c.states[0][1])
+
+    def test_matrix_measurement(self):
+        env1 = Envelope(polarization=Polarization(PolarizationLabel.V))
+        env2 = Envelope()
+        env1.fock.label = 1
+        env1.fock.expand()
+        env1.fock.expand()
+        env1.polarization.expand()
+        env1.polarization.expand()
+        c = CompositeEnvelope(env1, env2)
+        c.combine(env1.polarization, env2.fock, env2.polarization)
+        m = c.measure(env1)
+        self.assertEqual(1, m[0])
+        self.assertFalse(env1 in c.envelopes)
+        self.assertFalse(env1.polarization in c.states[0][1])
+        self.assertFalse(env1.fock in c.states[0][1])

@@ -88,7 +88,7 @@ class TestFock(unittest.TestCase):
         """
         Test measurement, when state is combined into an envelope
         """
-        r = random.randint(1,10)
+        r = random.randint(1, 10)
         env = Envelope()
         op = FockOperation(FockOperationType.Creation, apply_count=r)
         env.apply_operation(op)

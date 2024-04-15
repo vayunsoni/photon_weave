@@ -13,6 +13,9 @@ from photon_weave.state.fock import Fock
 from photon_weave.state.polarization import Polarization
 from photon_weave.state.envelope import Envelope
 from photon_weave.state.composite_envelope import CompositeEnvelope
+from photon_weave.operation.polarization_operations import (
+    PolarizationOperation, PolarizationOperationType
+)
 
 
 class TestFockOperation(unittest.TestCase):
@@ -111,3 +114,34 @@ class TestFockOperation(unittest.TestCase):
                 self.assertAlmostEqual(v[0], 0.7071068)
             else:
                 self.assertAlmostEqual(v[0], 0)
+
+    def test_cnot_operation(self):
+        e1 = Envelope()
+        e2 = Envelope()
+        H = PolarizationOperation(
+            operation=PolarizationOperationType.H)
+        e1.apply_operation(H)
+        CNOT = CompositeOperation(
+            operation=CompositeOperationType.CNOT)
+        CNOT.operate(e1,e2)
+        states = e1.composite_envelope.states[0][0]
+        self.assertAlmostEqual(1/np.sqrt(2), states[0][0])
+        self.assertAlmostEqual(0, states[1][0])
+        self.assertAlmostEqual(0, states[2][0])
+        self.assertAlmostEqual(1/np.sqrt(2), states[3][0])
+
+    def test_cnot_second(self):
+        e1 = Envelope()
+        e2 = Envelope()
+        c = CompositeEnvelope(e1, e2)
+        H = PolarizationOperation(
+            operation=PolarizationOperationType.H)
+        e1.apply_operation(H)
+        CNOT = CompositeOperation(
+            operation=CompositeOperationType.CNOT)
+        c.apply_operation(CNOT, e1, e2)
+        states = e1.composite_envelope.states[0][0]
+        self.assertAlmostEqual(1/np.sqrt(2), states[0][0])
+        self.assertAlmostEqual(0, states[1][0])
+        self.assertAlmostEqual(0, states[2][0])
+        self.assertAlmostEqual(1/np.sqrt(2), states[3][0])

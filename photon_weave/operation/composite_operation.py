@@ -17,6 +17,7 @@ class WrongNumberOfStatesException(Exception):
 
 class CompositeOperationType(Enum):
     NonPolarizingBeamSplit = auto()
+    CNOT = auto()
 
 def ensure_equal_expansion(func):
     """
@@ -69,7 +70,17 @@ class CompositeOperation():
         match self.operation:
             case CompositeOperationType.NonPolarizingBeamSplit:
                 self._operate_non_polarizing_beam_split(*args)
+            case CompositeOperationType.CNOT:
+                self._operate_cnot(*args)
 
+
+    @ensure_composite
+    def _operate_cnot(self, *args, **kwargs):
+        ce = args[0].composite_envelope
+        ce.combine(args[0].polarization, args[1].polarization)
+        ce.rearange(args[0].polarization, args[1].polarization)
+        self.compute_operator()
+        ce._apply_operator(self, args[0].polarization, args[1].polarization)
 
     @ensure_composite
     def _operate_non_polarizing_beam_split(self, *args, **kwargs):
@@ -107,4 +118,11 @@ class CompositeOperation():
                 theta = self.kwargs.get("theta", 0)  # Default to 0 if not provided
                 self.operator = theta * self.operator
                 self.operator = expm(1j * self.operator)
+            case CompositeOperationType.CNOT:
+                self.operator = np.array(
+                    [[1,0,0,0],
+                     [0,1,0,0],
+                     [0,0,0,1],
+                     [0,0,1,0]])
+            
 

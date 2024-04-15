@@ -4,7 +4,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="photon_weave",
-    version="0.0.1",
+    version="0.0.2",
     author="Simon Sekavčnik",
     author_email="simon.sekavcnik@tum.de",
     description="Fock Envelope Simulator",

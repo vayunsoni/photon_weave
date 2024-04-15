@@ -8,7 +8,8 @@ import numpy as np
 
 
 class Envelope:
-    def __init__(self, fock: Optional['Fock'] = None,
+    def __init__(self, wavelength: float = 1550,
+                 fock: Optional['Fock'] = None,
                  polarization: Optional['Polarization'] = None):
         if fock is None:
             from .fock import Fock
@@ -27,6 +28,7 @@ class Envelope:
         self.composite_matrix = None
         self.composite_envelope = None
         self.measured = False
+        self.wavelength = wavelength
 
     def __repr__(self):
         if self.measured:

@@ -79,7 +79,7 @@ class PolarizationOperation(GenericOperation):
                 self.operator[0][0] = 1
                 self.operator[1][1] = -1
             case PolarizationOperationType.H:
-                self.operator = 1/np.sqrt(2)*np.array([[1, 1], [1 -1]], dtype=np.complex_)
+                self.operator = 1/np.sqrt(2)*np.array([[1, 1], [1, -1]], dtype=np.complex_)
             case PolarizationOperationType.S:
                 self.operator = np.array([[1, 0], [0, 1j]], dtype=np.complex_)
             case PolarizationOperationType.T:

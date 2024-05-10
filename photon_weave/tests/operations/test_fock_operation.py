@@ -186,3 +186,22 @@ class TestFockOperation(unittest.TestCase):
         fock = Fock()
         op = FockOperation(FockOperationType.Squeeze, zeta=0+1j)
         fock.apply_operation(op)
+
+
+    def test_custom_operator(self):
+        fock = Fock()
+        fock.label = 1
+        op = FockOperation(
+            FockOperationType.Custom,
+            expression=("expm", ("s_mult", -1j ,np.pi, "n"))
+        )
+        fock.apply_operation(op)
+
+        expected_vector = np.array([0.0 +0j, -1.0 + 0j, 0.0 + 0j, 0 +0j])
+        expected_vector = expected_vector.reshape(-1, 1)
+        self.assertTrue(np.allclose(
+                fock.state_vector,
+                expected_vector,
+                atol=1e-10,  # Absolute tolerance
+                rtol=0  # Relative tolerance
+        ))

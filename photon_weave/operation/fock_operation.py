@@ -1,11 +1,12 @@
 """
 Operations on fock spaces
 """
-
+from photon_weave.extra import interpreter
 from enum import Enum, auto
 from .generic_operation import GenericOperation
 import numpy as np
-import scipy.linalg
+import scipy.linalg as la
+import sympy as sp
 
 class FockOperationType(Enum):
     # implemented
@@ -19,6 +20,7 @@ class FockOperationType(Enum):
     # implemented
     Displace = auto()
     Identity = auto()
+    Custom = auto()
 
 
 class FockOperation(GenericOperation):
@@ -63,7 +65,7 @@ class FockOperation(GenericOperation):
                 self.operator = np.diag(phases)
             case FockOperationType.Displace:
                 alpha = self.kwargs["alpha"]
-                self.operator = scipy.linalg.expm(
+                self.operator = la.expm(
                     alpha * self._create(dimensions) -
                     self._destroy(dimensions) * alpha
                 )
@@ -71,15 +73,18 @@ class FockOperation(GenericOperation):
                 zeta = self.kwargs["zeta"]
                 a = self._destroy(dimensions)
                 a_dagger = self._create(dimensions)
-                self.operator = scipy.linalg.expm(
+                self.operator = la.expm(
                     0.5 * (np.conj(zeta) * np.dot(a, a) -
                            zeta * np.dot(a_dagger, a_dagger)))
             case FockOperationType.Identity:
                 self.operator = np.eye(dimensions)
-    
-
+            case FockOperationType.Custom:
+                if 'expression' in self.kwargs:
+                    self._evaluate_custom_operator(
+                        self.kwargs['expression'],
+                        dimensions)
         if self.apply_count > 1:
-            self.operator = np.linalg.matrix_power(self.operator, self.apply_count)
+            self.operator = la.matrix_power(self.operator, self.apply_count)
 
     def _create(self, cutoff):
         a_dagger = np.zeros((cutoff, cutoff), dtype=np.complex_)
@@ -108,6 +113,8 @@ class FockOperation(GenericOperation):
                 return 1
             case FockOperationType.Squeeze:
                 return 1
+            case _:
+                return 1
         
     def cutoff_required(self, num_quanta=0) -> int:
         """
@@ -122,4 +129,15 @@ class FockOperation(GenericOperation):
             case _:
                 return 0
 
+    def assign_operator(self, expression):
+        if self.operation is FockOperationType.Custom:
+            self.expression = expression
 
+    def _evaluate_custom_operator(self, expression, dimensions):
+        context = {
+            "a": self._destroy(dimensions),
+            "a_dag": self._create(dimensions),
+        }
+        context["n"] = np.dot(context["a_dag"], context["a"])
+        self.operator = interpreter(expression, context)
+        

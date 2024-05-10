@@ -4,13 +4,70 @@ Envelope
 from __future__ import annotations
 from typing import Optional
 from photon_weave.operation.generic_operation import GenericOperation
+from enum import Enum, auto
 import numpy as np
+
+class WaveFunctionType:
+    Gaussian = auto()
+
+class WaveFunction:
+    def __init__(
+            self,
+            wave_function_type: WaveFunctionType = WaveFunctionType.Gaussian,
+            **kwargs
+    ):
+        self.wave_function_type = wave_function_type
+        self.kwargs = kwargs
+        self._function = None
+        self.envelope = None
+
+        match wave_function_type:
+            case WaveFunctionType.Gaussian:
+                if "sigma" not in kwargs:
+                    sigma = 1
+
+    def register_envelope(self, envelope):
+        self.envelope = envelope
+
+    @property
+    def function():
+        if self._function is None:
+            self._compute_function()
+        return self._function
+
+    def _compute_function(self):
+        """
+        Compute the function
+        """
+        match self.wave_function_type:
+            case WaveFunctionType.Gaussian:
+                omega = self.envelope.wavelength
+                sigma = self.kwargs["sigma"]
+                self._function = lambda t, t0=0: (1/ (sigma * np.sqrt(2 * np.pi)))**0.5 * \
+                    np.exp(-(t-t0)**2 / (2 * sigma**2)) * \
+                    np.exp(1j * omega * t)
+
+    def overlap(self, other:WaveFunction, delay):
+        """
+        Computes the overlap with another wave function
+        """
+        t = np.linspace(-10,10,1000)
+
+        psi = self.function(t)
+        phi = other.function(t, delay)
+
+        overlap = np.trapz(phi.conj() * psi, t)
+        return overlap
+
+
 
 
 class Envelope:
     def __init__(self, wavelength: float = 1550,
                  fock: Optional['Fock'] = None,
-                 polarization: Optional['Polarization'] = None):
+                 polarization: Optional['Polarization'] = None,
+                 wave_function: WaveFunction = WaveFunction()
+                 ):
         if fock is None:
             from .fock import Fock
             self.fock = Fock(envelope=self)
@@ -29,6 +86,8 @@ class Envelope:
         self.composite_envelope = None
         self.measured = False
         self.wavelength = wavelength
+        self.wave_function = wave_function
+        self.wave_function.register_envelope(self)
 
     def __repr__(self):
         if self.measured:
@@ -198,4 +257,7 @@ class EnvelopeAssignedException(Exception):
     pass
 
 class EnvelopeAlreadyMeasuredException(Exception):
+    pass
+
+class MissingWavefunctionParameterException(Exception):
     pass

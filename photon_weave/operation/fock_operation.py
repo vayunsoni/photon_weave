@@ -6,7 +6,6 @@ from enum import Enum, auto
 from .generic_operation import GenericOperation
 import numpy as np
 import scipy.linalg as la
-import sympy as sp
 
 class FockOperationType(Enum):
     # implemented

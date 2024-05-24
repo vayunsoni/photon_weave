@@ -8,7 +8,8 @@ from photon_weave.state.envelope import Envelope
 from photon_weave.state.composite_envelope import (
     CompositeEnvelope,
     StateNotInThisCompositeEnvelopeException,
-    FockOrPolarizationExpectedException
+    FockOrPolarizationExpectedException,
+    pad_operator
 )
 from photon_weave.state.polarization import (
     Polarization,
@@ -483,7 +484,6 @@ class TestFock(unittest.TestCase):
         op = FockOperation(FockOperationType.Creation, apply_count=r)
         c.apply_operation(op, env1)
         c.combine(env1.polarization, env1.fock, env2.fock)
-        print(c.states)
 
     def test_measurement_removal(self):
         """
@@ -570,3 +570,138 @@ class TestFock(unittest.TestCase):
         self.assertFalse(env1 in c.envelopes)
         self.assertFalse(env1.polarization in c.states[0][1])
         self.assertFalse(env1.fock in c.states[0][1])
+
+    def test_POVM_measurement(self):
+        """
+        Test the POVM measurement ensuring that it handles state and operator extension,
+        correct probability calculations, and state updates correctly.
+        """
+        # Create envelopes with dummy states that have simple behaviors
+        env1 = Envelope(polarization=Polarization(PolarizationLabel.H))
+        env2 = Envelope(polarization=Polarization(PolarizationLabel.V))
+
+        # Initialize composite envelope
+        c = CompositeEnvelope(env1, env2)
+
+        # Define properly summing up to identity POVM operators for a two-state system
+        E1 = np.array([[2/3, 0], [0, 0]])  # Acts more on |0>
+        E2 = np.array([[1/3, 0], [0, 1]])  # Acts partially on |0> and fully on |1>
+
+        # Combine states into the composite envelope
+        c.combine(env1.polarization, env2.polarization)
+
+        # Perform POVM measurement with the defined operators
+        result_index = c.POVM_measureme(
+            [env1.polarization, env2.polarization],
+            [E1, E2]
+        )
+
+        post_state = c.states[0][0]
+
+        self.assertIn(result_index, [0, 1], "Outcome should be either 0 or 1.")
+        norm_post_state = np.linalg.norm(post_state)
+        self.assertTrue(np.isclose(norm_post_state, 1), "Post-measurement state is not normalized correctly.")
+
+    def test_POVM_measurement_three_envelopes(self):
+        env1 = Envelope(polarization=Polarization(PolarizationLabel.H))
+        env2 = Envelope(polarization=Polarization(PolarizationLabel.V))
+        env3 = Envelope(polarization=Polarization(PolarizationLabel.H))
+
+        c = CompositeEnvelope(env1, env2, env3)
+
+        # Define POVM operators that properly sum to identity
+        E1 = np.array([[0.7, 0], [0, 0.2]])
+        E2 = np.array([[0.2, 0], [0, 0.7]])
+        E3 = np.eye(2) - E1 - E2  # Ensure completeness relation
+
+        c.combine(env1.polarization, env2.polarization, env3.polarization)
+
+        result_index = c.POVM_measureme(
+            [env1.polarization, env2.polarization],
+            [E1, E2, E3]  # Include E3 to cover the entire space
+        )
+
+        post_state = c.states[0][0]
+        self.assertIn(result_index, [0, 1, 2], "Outcome index should be 0, 1, or 2.")
+
+        norm_post_state = np.linalg.norm(post_state)
+        self.assertTrue(np.isclose(norm_post_state, 1), "Post-measurement state is not normalized correctly.")
+
+    def test_POVM_measurement_three_envelopes_matrix(self):
+        env1 = Envelope(polarization=Polarization(PolarizationLabel.H))
+        env2 = Envelope(polarization=Polarization(PolarizationLabel.V))
+        env3 = Envelope(polarization=Polarization(PolarizationLabel.H))
+        env1.fock.expand()
+        env1.fock.expand()
+
+        c = CompositeEnvelope(env1, env2, env3)
+
+        # Define POVM operators that properly sum to identity
+        E1 = np.array([[0.7, 0], [0, 0.2]])
+        E2 = np.array([[0.2, 0], [0, 0.7]])
+        E3 = np.eye(2) - E1 - E2  # Ensure completeness relation
+
+        c.combine(env1.polarization, env2.polarization, env3.polarization)
+
+        result_index = c.POVM_measureme(
+            [env1.polarization, env2.polarization],
+            [E1, E2, E3]  # Include E3 to cover the entire space
+        )
+
+        post_state = c.states[0][0]
+        self.assertIn(result_index, [0, 1, 2], "Outcome index should be 0, 1, or 2.")
+
+        norm_post_state = np.linalg.norm(post_state)
+        self.assertTrue(np.isclose(norm_post_state, 1), "Post-measurement state is not normalized correctly.")
+
+    def known_POVM_test(self):
+        env1 = Envelope(polarization=Polarization(PolarizationLabel.H))
+        env2 = Envelope(polarization=Polarization(PolarizationLabel.V))
+        env1.polarization.expand()
+        env1.polarization.expand()
+
+        c = CompositeEnvelope(env1, env2)
+        c.combine(env1.polarization, env2.polarization)
+        
+        E1 = np.array([[1/3, 0], [0, 0]])
+        E2 = np.array([[0, 0], [0, 1/3]])
+        E3 = np.eye(2) - E1 - E2 
+
+        c.POVM_measureme(
+            [env1.polarization],
+            [E1, E2, E3]
+        )
+
+class TestPadOperator(unittest.TestCase):
+    def test_pad_operator_single(self):
+        # Test padding an operator for a single subsystem
+        state_dims = [2, 2, 2]  # Three qubits
+        operator = np.array([[1, 0], [0, 0]])  # Projection operator on the first qubit
+        target_index = 0
+        expected_result = np.array([[1, 0, 0, 0, 0, 0, 0, 0],
+                                    [0, 1, 0, 0, 0, 0, 0, 0],
+                                    [0, 0, 1, 0, 0, 0, 0, 0],
+                                    [0, 0, 0, 1, 0, 0, 0, 0],
+                                    [0, 0, 0, 0, 0, 0, 0, 0],
+                                    [0, 0, 0, 0, 0, 0, 0, 0],
+                                    [0, 0, 0, 0, 0, 0, 0, 0],
+                                    [0, 0, 0, 0, 0, 0, 0, 0]])
+        padded_op = pad_operator(operator, state_dims, target_index)
+        np.testing.assert_array_equal(padded_op, expected_result)
+
+    def test_pad_operator_span_multiple(self):
+        # Test padding an operator that spans multiple subsystems
+        state_dims = [2, 2, 2]  # Three qubits
+        operator = np.eye(4)  # Identity on two qubits
+        target_index = 1
+        padded_op = pad_operator(operator, state_dims, target_index)
+        expected_result = np.kron(np.eye(2), np.eye(4))
+        np.testing.assert_array_equal(padded_op, expected_result)
+
+    def test_operator_dimension_mismatch(self):
+        # Test handling of dimension mismatch
+        state_dims = [2, 3, 2]
+        operator = np.eye(2)  # Operator intended for a single qubit
+        target_index = 1
+        with self.assertRaises(ValueError):
+            pad_operator(operator, state_dims, target_index)

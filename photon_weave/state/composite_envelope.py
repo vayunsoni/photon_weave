@@ -324,6 +324,9 @@ class CompositeEnvelope:
 
     @redirect_if_consumed
     def measure(self, *states) -> int:
+        """
+        Measures the number state
+        """
         from photon_weave.state.envelope import Envelope
         from photon_weave.state.polarization import Polarization
         from photon_weave.state.fock import Fock
@@ -362,6 +365,61 @@ class CompositeEnvelope:
                 self.envelopes.remove(s.envelope)
         self.update_indices()
         return outcomes
+
+    @redirect_if_consumed
+    def POVM_measureme(self, states, operators, non_destructive=False) -> int:
+        from photon_weave.state.envelope import Envelope
+        from photon_weave.state.polarization import Polarization
+        from photon_weave.state.fock import Fock
+
+        self.combine(*states)
+        self.rearange(*states)
+
+        
+        # Find the index of the composite state
+        composite_state_index = self._find_composite_state_index(*states)
+        if composite_state_index is None:
+            raise ValueError("States are not all in the same composite state")
+
+        composite_state = self.states[composite_state_index][0]
+        state_dimensions = [state.dimensions for state in self.states[composite_state_index][1]]
+
+        #Create combuined operator
+        total_dimensions = np.prod(state_dimensions)
+        probabilities = []
+        outcome_states = []
+        target_index = self.states[composite_state_index][1].index(states[0])
+        operators = [pad_operator(op, state_dimensions, target_index) for op in operators]
+        validate_povm_operators(operators, total_dimensions)
+        for operator in operators:
+            # Apply the padded operator depending on the state representation
+            if self.states[composite_state_index][1][0].expansion_level is ExpansionLevel.Vector:
+                outcome_state = operator @ composite_state
+                prob = composite_state.T.conj() @ outcome_state
+                prob = prob[0][0]
+            else: # Matrix state
+                prob = np.trace(operator @ composite_state)
+                outcome_state = operator @ composite_state @ operator.T.conj()
+                if np.trace(outcome_state) > 0:
+                    outcome_state = outcome_state / np.trace(outcome_state)
+                else:
+                    outcome_state = np.zeros_like(outcome_state)
+
+            probabilities.append(prob)
+            outcome_states.append(outcome_state)
+        probabilities = np.array(probabilities)
+        probabilities /= probabilities.sum()
+        chosen_index = np.random.choice(len(probabilities),p=probabilities)
+        chosen_state = outcome_states[chosen_index]
+        if not non_destructive:
+            if self.states[composite_state_index][1][0].expansion_level is ExpansionLevel.Vector:
+                self.states[composite_state_index][0] = chosen_state / np.linalg.norm(chosen_state)
+            else:
+                self.states[composite_state_index][0] = chosen_state / np.trace(chosen_state)
+        return chosen_index
+
+            
+                   
 
     def _measure_vector(self, state):
         o = None
@@ -467,7 +525,6 @@ class CompositeEnvelope:
         # Update system information post trace-out
         del self.states[space_index][1][subsystem_index]
         
-
     @redirect_if_consumed
     def contract(self, state):
         if state.expansion_level < ExpansionLevel.Matrix:
@@ -490,3 +547,44 @@ class CompositeEnvelope:
         # Ensure the structure of self.states[space_index][1] (if it exists) supports iteration like this
         for s in self.states[space_index][1]:
             s.expansion_level = ExpansionLevel.Vector
+
+def pad_operator(operator, state_dimensions, target_index):
+    """
+    Expands an operator to act on the full Hilbert space of a composite system, targeting a specific subsystem
+    Args:
+    operator (np.ndarray): The operator that acts on the target state.
+    state_dimensions (list): A list of dimensions for each part of the composite system
+    target_index (int): The index of the state within the composite system where the operator should be applied
+
+    Returns:
+    np.ndarray: An operator padded to act actoss the entire Hilbert space.
+    """
+
+    padded_operator = np.eye(1)
+    span = 0
+    operator_dim = operator.shape[0]
+    cumulative_dim = 1
+    i = 0
+
+    while cumulative_dim < operator_dim:
+        if target_index + span == len(state_dimensions):
+            raise ValueError("Operator dimensions exceed available system dimensions from target index")
+        cumulative_dim *= state_dimensions[target_index+span]
+        span += 1
+    if cumulative_dim != operator_dim:
+        raise ValueError("Operator dimensions do not match the dimensions of the spanned subsystems.")
+
+    for index, dim in enumerate(state_dimensions):
+        if index < target_index or index >= target_index + span:
+            padded_operator = np.kron(padded_operator, np.eye(dim))
+        elif index == target_index:
+            padded_operator = np.kron(padded_operator, operator)
+
+    return padded_operator
+
+def validate_povm_operators(operators, dimension):
+    """Ensure that the sum of operators equals the identity matrix of the given dimension."""
+    sum_operators = sum(operators)
+    identity = np.eye(dimension)
+    if not np.allclose(sum_operators, identity):
+        raise ValueError("Provided POVM operators do not sum up to the identity operator.")

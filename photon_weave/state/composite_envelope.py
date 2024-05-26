@@ -1,8 +1,10 @@
 import numpy as np
 from .expansion_levels import ExpansionLevel
 
+
 class FockOrPolarizationExpectedException(Exception):
     pass
+
 
 class StateNotInThisCompositeEnvelopeException(Exception):
     pass
@@ -11,17 +13,19 @@ class StateNotInThisCompositeEnvelopeException(Exception):
 def redirect_if_consumed(method):
     def wrapper(self, *args, **kwargs):
         # Check if the object has been consumed by another CompositeEnvelope
-        if hasattr(self, '_consumed_by') and self._consumed_by:
+        if hasattr(self, "_consumed_by") and self._consumed_by:
             # Redirect the method call to the new CompositeEnvelope
             return getattr(self._consumed_by, method.__name__)(*args, **kwargs)
         else:
             return method(self, *args, **kwargs)
+
     return wrapper
 
 
 class CompositeEnvelope:
     def __init__(self, *envelopes):
         from photon_weave.state.envelope import Envelope
+
         self.envelopes = []
         self.states = []
         # If the state is consumed by another composite state, the reference is stored here
@@ -34,8 +38,10 @@ class CompositeEnvelope:
                     self.states.extend(e.states)
                     seen_composite_envelopes.add(e)
             elif isinstance(e, Envelope):
-                if (not e.composite_envelope is None and
-                    e.composite_envelope not in seen_composite_envelopes):
+                if (
+                    not e.composite_envelope is None
+                    and e.composite_envelope not in seen_composite_envelopes
+                ):
                     self.states.extend(e.composite_envelope.states)
                     seen_composite_envelopes.add(e.composite_envelope)
                     self.envelopes.extend(e.composite_envelope.envelopes)
@@ -46,7 +52,7 @@ class CompositeEnvelope:
             ce.states = []
 
         self.envelopes = list(set(self.envelopes))
-        self.update_indices() 
+        self.update_indices()
         for e in self.envelopes:
             e.composite_envelope = self
 
@@ -57,6 +63,7 @@ class CompositeEnvelope:
         """
         from photon_weave.state.fock import Fock
         from photon_weave.state.polarization import Polarization
+
         # Check if states are already combined
         for _, obj_list in self.states:
             if all(target in obj_list for target in states):
@@ -75,7 +82,7 @@ class CompositeEnvelope:
         existing_product_states = []
         tmp = []
         for state in states:
-            for i,s in enumerate(self.states):
+            for i, s in enumerate(self.states):
                 if state in s[1]:
                     existing_product_states.append(i)
                     tmp.append(state)
@@ -103,7 +110,7 @@ class CompositeEnvelope:
                 )
         else:
             self.states.append([1, []])
-                
+
         for i in existing_product_states:
             if self.states[i][1][0].expansion_level < expected_expansion:
                 self.states[i][0] = np.outer(
@@ -113,9 +120,7 @@ class CompositeEnvelope:
 
         for eps in existing_product_states:
             existing = self.states[eps]
-            self.states[target_ps][0] = np.kron(
-                self.states[target_ps][0],
-                existing[0])
+            self.states[target_ps][0] = np.kron(self.states[target_ps][0], existing[0])
             self.states[target_ps][1].extend(existing[1])
         ## Second combine new spaces
         for nps in new_product_states:
@@ -124,14 +129,13 @@ class CompositeEnvelope:
             if nps.expansion_level == ExpansionLevel.Vector:
                 if nps.state_vector is not None:
                     self.states[target_ps][0] = np.kron(
-                        self.states[target_ps][0],
-                        nps.state_vector)
+                        self.states[target_ps][0], nps.state_vector
+                    )
                     nps.state_vector = None
                     self.states[target_ps][1].append(nps)
                 else:
                     self.states[target_ps][0] = np.kron(
-                        self.states[target_ps][0],
-                        nps.envelope.composite_vector
+                        self.states[target_ps][0], nps.envelope.composite_vector
                     )
                     indices = [None, None]
                     indices[nps.envelope.fock.index] = nps.envelope.fock
@@ -141,14 +145,13 @@ class CompositeEnvelope:
             elif nps.expansion_level == ExpansionLevel.Matrix:
                 if nps.density_matrix is not None:
                     self.states[target_ps][0] = np.kron(
-                        self.states[target_ps][0],
-                        nps.density_matrix)
+                        self.states[target_ps][0], nps.density_matrix
+                    )
                     nps.density_matrix = None
                     self.states[target_ps][1].append(nps)
                 else:
                     self.states[target_ps][0] = np.kron(
-                        self.states[target_ps][0],
-                        nps.envelope.composite_matrix
+                        self.states[target_ps][0], nps.envelope.composite_matrix
                     )
                     indices = [None, None]
                     indices[nps.envelope.fock.index] = nps.envelope.fock
@@ -212,11 +215,15 @@ class CompositeEnvelope:
 
         # Check if the states are already in the desired order
         current_order = self.states[composite_state_index][1]
-        if all(ordered_states[i] == current_order[i]
-               for i in range(min(len(ordered_states), len(current_order)))):
+        if all(
+            ordered_states[i] == current_order[i]
+            for i in range(min(len(ordered_states), len(current_order)))
+        ):
             return
 
-        dimensions = [state.dimensions for state in self.states[composite_state_index][1]]
+        dimensions = [
+            state.dimensions for state in self.states[composite_state_index][1]
+        ]
 
         new_order = self.states[composite_state_index][1].copy()
         for idx, ordered_state in enumerate(ordered_states):
@@ -231,33 +238,41 @@ class CompositeEnvelope:
     def _reorder_states(self, order, state_index):
         # Calculate the total dimension of the composite system
         total_dim = np.prod([s.dimensions for s in self.states[state_index][1]])
-        
+
         # Calculate the current (flattened) index for each subsystem
         current_dimensions = [s.dimensions for s in self.states[state_index][1]]
         target_dimensions = [s.dimensions for s in order]  # The new order's dimensions
-        
+
         # Initialize the permutation matrix
         permutation_matrix = np.zeros((total_dim, total_dim))
-        
+
         # Calculate new index for each element in the flattened composite state
         for idx in range(total_dim):
             # Determine the multi-dimensional index in the current order
             multi_idx = np.unravel_index(idx, current_dimensions)
-            
+
             # Map the multi-dimensional index to the new order
-            new_order_multi_idx = [multi_idx[self.states[state_index][1].index(s)] for s in order]
-            
+            new_order_multi_idx = [
+                multi_idx[self.states[state_index][1].index(s)] for s in order
+            ]
+
             # Calculate the linear index in the new order
             new_idx = np.ravel_multi_index(new_order_multi_idx, target_dimensions)
-            
+
             # Update the permutation matrix
             permutation_matrix[new_idx, idx] = 1
 
         if order[0].expansion_level == ExpansionLevel.Vector:
-            self.states[state_index][0] = permutation_matrix @ self.states[state_index][0]
+            self.states[state_index][0] = (
+                permutation_matrix @ self.states[state_index][0]
+            )
             self.states[state_index][1] = order
         elif order[0].expansion_level == ExpansionLevel.Matrix:
-            self.states[state_index][0] = permutation_matrix @ self.states[state_index][0] @ permutation_matrix.conj().T
+            self.states[state_index][0] = (
+                permutation_matrix
+                @ self.states[state_index][0]
+                @ permutation_matrix.conj().T
+            )
             self.states[state_index][1] = order
 
     @redirect_if_consumed
@@ -267,9 +282,11 @@ class CompositeEnvelope:
         from photon_weave.operation.composite_operation import CompositeOperation
         from photon_weave.state.envelope import Envelope
         from photon_weave.state.composite_envelope import CompositeEnvelope
+
         csi = self._find_composite_state_index(states[0])
-        if (isinstance(operation, FockOperation) or
-            isinstance(operation, PolarizationOperation)):
+        if isinstance(operation, FockOperation) or isinstance(
+            operation, PolarizationOperation
+        ):
             if csi is None:
                 states[0].apply_operation(operation)
             else:
@@ -285,9 +302,14 @@ class CompositeEnvelope:
         from photon_weave.state.fock import Fock
         from photon_weave.state.polarization import Polarization
         from photon_weave.operation.fock_operation import (
-            FockOperation, FockOperationType)
+            FockOperation,
+            FockOperationType,
+        )
         from photon_weave.operation.polarization_operations import (
-            PolarizationOperation, PolarizationOperationType)
+            PolarizationOperation,
+            PolarizationOperationType,
+        )
+
         csi = self._find_composite_state_index(*states)
         composite_operator = 1
         skip_count = 0
@@ -295,12 +317,13 @@ class CompositeEnvelope:
             if skip_count > 0:
                 skip_count -= 1
                 continue
-            if all(state is self.states[csi][1][i+j] for j, state in enumerate(states)):
+            if all(
+                state is self.states[csi][1][i + j] for j, state in enumerate(states)
+            ):
                 if operation.operator is None:
                     operation.compute_operator(state.dimensions)
-                composite_operator = np.kron(
-                    composite_operator, operation.operator)
-                skip_count += len(states)-1
+                composite_operator = np.kron(composite_operator, operation.operator)
+                skip_count += len(states) - 1
             else:
                 identity = None
                 if isinstance(state, Fock):
@@ -308,13 +331,10 @@ class CompositeEnvelope:
                     identity.compute_operator(state.dimensions)
                     identity = identity.operator
                 elif isinstance(state, Polarization):
-                    identity = PolarizationOperation(
-                        PolarizationOperationType.I)
+                    identity = PolarizationOperation(PolarizationOperationType.I)
                     identity.compute_operator()
                     identity = identity.operator
-                composite_operator = np.kron(
-                    composite_operator,
-                    identity)
+                composite_operator = np.kron(composite_operator, identity)
 
         if self.states[csi][1][0].expansion_level == ExpansionLevel.Vector:
             self.states[csi][0] = composite_operator @ self.states[csi][0]
@@ -330,6 +350,7 @@ class CompositeEnvelope:
         from photon_weave.state.envelope import Envelope
         from photon_weave.state.polarization import Polarization
         from photon_weave.state.fock import Fock
+
         outcomes = []
         nstates = []
         for s in states:
@@ -367,7 +388,7 @@ class CompositeEnvelope:
         return outcomes
 
     @redirect_if_consumed
-    def POVM_measureme(self, states, operators, non_destructive=False) -> int:
+    def POVM_measurement(self, states, operators, non_destructive=False) -> int:
         from photon_weave.state.envelope import Envelope
         from photon_weave.state.polarization import Polarization
         from photon_weave.state.fock import Fock
@@ -375,51 +396,60 @@ class CompositeEnvelope:
         self.combine(*states)
         self.rearange(*states)
 
-        
         # Find the index of the composite state
         composite_state_index = self._find_composite_state_index(*states)
         if composite_state_index is None:
             raise ValueError("States are not all in the same composite state")
 
         composite_state = self.states[composite_state_index][0]
-        state_dimensions = [state.dimensions for state in self.states[composite_state_index][1]]
+        state_dimensions = [
+            state.dimensions for state in self.states[composite_state_index][1]
+        ]
 
-        #Create combuined operator
+        # Create combuined operator
         total_dimensions = np.prod(state_dimensions)
         probabilities = []
         outcome_states = []
         target_index = self.states[composite_state_index][1].index(states[0])
-        operators = [pad_operator(op, state_dimensions, target_index) for op in operators]
+        operators = [
+            pad_operator(op, state_dimensions, target_index) for op in operators
+        ]
         validate_povm_operators(operators, total_dimensions)
         for operator in operators:
             # Apply the padded operator depending on the state representation
-            if self.states[composite_state_index][1][0].expansion_level is ExpansionLevel.Vector:
+            if (
+                self.states[composite_state_index][1][0].expansion_level
+                is ExpansionLevel.Vector
+            ):
                 outcome_state = operator @ composite_state
                 prob = composite_state.T.conj() @ outcome_state
                 prob = prob[0][0]
-            else: # Matrix state
+            else:  # Matrix state
                 prob = np.trace(operator @ composite_state)
                 outcome_state = operator @ composite_state @ operator.T.conj()
                 if np.trace(outcome_state) > 0:
                     outcome_state = outcome_state / np.trace(outcome_state)
                 else:
                     outcome_state = np.zeros_like(outcome_state)
-
             probabilities.append(prob)
             outcome_states.append(outcome_state)
-        probabilities = np.array(probabilities)
+        probabilities = np.real(np.array(probabilities))
         probabilities /= probabilities.sum()
-        chosen_index = np.random.choice(len(probabilities),p=probabilities)
+        chosen_index = np.random.choice(len(probabilities), p=probabilities)
         chosen_state = outcome_states[chosen_index]
         if not non_destructive:
-            if self.states[composite_state_index][1][0].expansion_level is ExpansionLevel.Vector:
-                self.states[composite_state_index][0] = chosen_state / np.linalg.norm(chosen_state)
+            if (
+                self.states[composite_state_index][1][0].expansion_level
+                is ExpansionLevel.Vector
+            ):
+                self.states[composite_state_index][0] = chosen_state / np.linalg.norm(
+                    chosen_state
+                )
             else:
-                self.states[composite_state_index][0] = chosen_state / np.trace(chosen_state)
+                self.states[composite_state_index][0] = chosen_state / np.trace(
+                    chosen_state
+                )
         return chosen_index
-
-            
-                   
 
     def _measure_vector(self, state):
         o = None
@@ -431,23 +461,16 @@ class CompositeEnvelope:
         probabilities = []
         projection_states = []
         before = np.eye(int(np.prod(dims[:subs_idx])))
-        after = np.eye(int(np.prod(dims[subs_idx+1:])))
+        after = np.eye(int(np.prod(dims[subs_idx + 1 :])))
         for i in range(state.dimensions):
-            projection = np.zeros(
-                (
-                    state.dimensions,
-                    state.dimensions
-                )
-            )
-            projection[i,i] = 1
+            projection = np.zeros((state.dimensions, state.dimensions))
+            projection[i, i] = 1
             full_projection = np.kron(np.kron(before, projection), after)
             projected_state = full_projection @ self.states[s_idx][0]
-            prob = np.linalg.norm(projected_state)**2
+            prob = np.linalg.norm(projected_state) ** 2
             probabilities.append(prob)
             projection_states.append(projected_state)
-        o = np.random.choice(
-            range(state.dimensions),
-            p=probabilities)
+        o = np.random.choice(range(state.dimensions), p=probabilities)
         self.states[s_idx][0] = projection_states[o]
         self.states[s_idx][0] /= np.linalg.norm(projection_states[o])
         self._trace_out(state)
@@ -464,25 +487,18 @@ class CompositeEnvelope:
         probabilities = []
         projection_states = []
         before = np.eye(int(np.prod(dims[:subs_idx])))
-        after = np.eye(int(np.prod(dims[subs_idx+1:])))
+        after = np.eye(int(np.prod(dims[subs_idx + 1 :])))
         rho = self.states[s_idx][0]
         for i in range(state.dimensions):
-            projection = np.zeros(
-                (
-                    state.dimensions,
-                    state.dimensions
-                )
-            )
-            projection[i,i] = 1
+            projection = np.zeros((state.dimensions, state.dimensions))
+            projection[i, i] = 1
             full_projection = np.kron(np.kron(before, projection), after)
             projected_state = full_projection @ rho @ full_projection.conj().T
             prob = np.trace(projected_state)
             probabilities.append(prob)
             projection_states.append(projected_state)
-        o = np.random.choice(
-            range(state.dimensions),
-            p=probabilities)
-        self.states[s_idx][0] = projection_states[o]/probabilities[o]
+        o = np.random.choice(range(state.dimensions), p=probabilities)
+        self.states[s_idx][0] = projection_states[o] / probabilities[o]
         self._trace_out(state)
         state._set_measured(remove_composite=False)
         return o
@@ -504,14 +520,13 @@ class CompositeEnvelope:
         reshape_dims = (*dims, *dims)
         c_id = 0
         for i in range(len(reshape_dims)):
-            if i%len(dims) == subsystem_index:
-                input_str+="a"
+            if i % len(dims) == subsystem_index:
+                input_str += "a"
             else:
                 char = letters[c_id]
-                input_str+=char
-                output_str+=char
+                input_str += char
+                output_str += char
                 c_id += 1
-                
 
         einsum_str = f"{input_str}->{output_str}"
 
@@ -519,12 +534,12 @@ class CompositeEnvelope:
         rho = np.einsum(einsum_str, rho)
         new_dims = np.prod(dims) // state.dimensions
         rho = rho.reshape(new_dims, new_dims)
-        self.states[space_index][0]=rho
+        self.states[space_index][0] = rho
 
         self.contract(state)
         # Update system information post trace-out
         del self.states[space_index][1][subsystem_index]
-        
+
     @redirect_if_consumed
     def contract(self, state):
         if state.expansion_level < ExpansionLevel.Matrix:
@@ -542,11 +557,12 @@ class CompositeEnvelope:
         vector = eigenvectors[:, np.argmax(eigenvalues)].reshape(-1, 1)
         # Update the state with the column vector
         self.states[space_index][0] = vector
-        
+
         # This line seems to attempt to update expansion_level for multiple states,
         # Ensure the structure of self.states[space_index][1] (if it exists) supports iteration like this
         for s in self.states[space_index][1]:
             s.expansion_level = ExpansionLevel.Vector
+
 
 def pad_operator(operator, state_dimensions, target_index):
     """
@@ -568,11 +584,15 @@ def pad_operator(operator, state_dimensions, target_index):
 
     while cumulative_dim < operator_dim:
         if target_index + span == len(state_dimensions):
-            raise ValueError("Operator dimensions exceed available system dimensions from target index")
-        cumulative_dim *= state_dimensions[target_index+span]
+            raise ValueError(
+                "Operator dimensions exceed available system dimensions from target index"
+            )
+        cumulative_dim *= state_dimensions[target_index + span]
         span += 1
     if cumulative_dim != operator_dim:
-        raise ValueError("Operator dimensions do not match the dimensions of the spanned subsystems.")
+        raise ValueError(
+            "Operator dimensions do not match the dimensions of the spanned subsystems."
+        )
 
     for index, dim in enumerate(state_dimensions):
         if index < target_index or index >= target_index + span:
@@ -582,9 +602,12 @@ def pad_operator(operator, state_dimensions, target_index):
 
     return padded_operator
 
+
 def validate_povm_operators(operators, dimension):
     """Ensure that the sum of operators equals the identity matrix of the given dimension."""
     sum_operators = sum(operators)
     identity = np.eye(dimension)
     if not np.allclose(sum_operators, identity):
-        raise ValueError("Provided POVM operators do not sum up to the identity operator.")
+        raise ValueError(
+            "Provided POVM operators do not sum up to the identity operator."
+        )

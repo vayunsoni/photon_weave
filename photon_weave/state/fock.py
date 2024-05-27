@@ -83,7 +83,7 @@ class Fock:
         if self.dimensions < 0:
             self.dimensions = self.label + 3
         if self.expansion_level is ExpansionLevel.Label:
-            state_vector = np.zeros(self.dimensions)
+            state_vector = np.zeros(int(self.dimensions))
             state_vector[self.label] = 1
             self.state_vector = state_vector[:, np.newaxis]
             self.label = None
@@ -129,9 +129,7 @@ class Fock:
             self.expand()
 
         cutoff_required = operation.cutoff_required(self._num_quanta)
-        print(cutoff_required)
         if cutoff_required > self.dimensions:
-            print("\n RESIZING STATE\n")
             self.resize(cutoff_required)
 
         match operation.operation:
@@ -269,18 +267,19 @@ class Fock:
         Returns the space
         """
         if self.index is None:
-            if self.label:
+            if not self.label is None:
                 self.expand()
-            if self.state_vector:
-                return self.state_vector
-            elif self.density_matrix:
-                return self.density_matrix
 
-        if len(self.index) == 1:
+            if not self.state_vector is None:
+                return self.state_vector
+            elif not self.density_matrix is None:
+                return self.density_matrix
+        elif len(self.index) == 1:
             # State is in the Envelope
             pass
 
         elif len(self.index) == 2:
+            print("tracing out")
             state = self.envelope.composite_envelope._trace_out(self, destructive=False)
             return state
 

@@ -507,13 +507,12 @@ class CompositeEnvelope:
     def _trace_out(self, state, destructive=True):
         space_index, subsystem_index = state.index
         dims = [s.dimensions for s in self.states[space_index][1]]
-        print(dims)
         if len(self.states[space_index][1]) < 2:
             return
         if state.expansion_level < ExpansionLevel.Matrix:
             self.expand(state)
         n = len(dims)
-        letters = "bcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
         rho = self.states[space_index][0]
 
         input_str = ""
@@ -523,32 +522,30 @@ class CompositeEnvelope:
         reshape_dims = (*dims, *dims)
         c_id = 0
         c_2_id = 0
+        trace_letters = iter(letters)
 
         # Build einsum string to trace out the specific system
         for i in range(len(reshape_dims)):
             if i % len(dims) == subsystem_index:
-                input_str += "a"
+                input_str += next(trace_letters)
             else:
-                char = letters[c_id]
+                char = next(trace_letters)
                 input_str += char
                 output_str += char
-                c_id += 1
+
+        trace_letters = iter(letters)
 
         for i in range(len(reshape_dims)):
             if i % len(dims) == subsystem_index:
-                char = letters[c_2_id]
+                char = next(trace_letters)
                 input_2_str += char
                 output_2_str += char
-                c_2_id += 1
             else:
-                input_2_str += "a"
+                input_2_str += next(trace_letters)
         einsum_str = f"{input_str}->{output_str}"
         einsum_2_str = f"{input_2_str}->{output_2_str}"
-        print(einsum_str)
-        print(einsum_2_str)
-        print(reshape_dims)
+
         rho = rho.reshape(reshape_dims)
-        #print(rho)
         traced_out_state = np.einsum(einsum_2_str, rho)
         traced_out_state = traced_out_state / np.trace(traced_out_state)
         rho = np.einsum(einsum_str, rho)

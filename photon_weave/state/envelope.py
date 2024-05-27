@@ -1,20 +1,21 @@
 """
 Envelope
 """
+
 from __future__ import annotations
 from typing import Optional
 from photon_weave.operation.generic_operation import GenericOperation
 from enum import Enum, auto
 import numpy as np
 
+
 class WaveFunctionType:
     Gaussian = auto()
 
+
 class WaveFunction:
     def __init__(
-            self,
-            wave_function_type: WaveFunctionType = WaveFunctionType.Gaussian,
-            **kwargs
+        self, wave_function_type: WaveFunctionType = WaveFunctionType.Gaussian, **kwargs
     ):
         self.wave_function_type = wave_function_type
         self.kwargs = kwargs
@@ -43,15 +44,17 @@ class WaveFunction:
             case WaveFunctionType.Gaussian:
                 omega = self.envelope.wavelength
                 sigma = self.kwargs["sigma"]
-                self._function = lambda t, t0=0: (1/ (sigma * np.sqrt(2 * np.pi)))**0.5 * \
-                    np.exp(-(t-t0)**2 / (2 * sigma**2)) * \
-                    np.exp(1j * omega * t)
+                self._function = (
+                    lambda t, t0=0: (1 / (sigma * np.sqrt(2 * np.pi))) ** 0.5
+                    * np.exp(-((t - t0) ** 2) / (2 * sigma**2))
+                    * np.exp(1j * omega * t)
+                )
 
-    def overlap(self, other:WaveFunction, delay):
+    def overlap(self, other: WaveFunction, delay):
         """
         Computes the overlap with another wave function
         """
-        t = np.linspace(-10,10,1000)
+        t = np.linspace(-10, 10, 1000)
 
         psi = self.function(t)
         phi = other.function(t, delay)
@@ -60,22 +63,24 @@ class WaveFunction:
         return overlap
 
 
-
-
 class Envelope:
-    def __init__(self, wavelength: float = 1550,
-                 fock: Optional['Fock'] = None,
-                 polarization: Optional['Polarization'] = None,
-                 wave_function: WaveFunction = WaveFunction()
-                 ):
+    def __init__(
+        self,
+        wavelength: float = 1550,
+        fock: Optional["Fock"] = None,
+        polarization: Optional["Polarization"] = None,
+        wave_function: WaveFunction = WaveFunction(),
+    ):
         if fock is None:
             from .fock import Fock
+
             self.fock = Fock(envelope=self)
         else:
             self.fock = fock
 
         if polarization is None:
             from .polarization import Polarization
+
             self.polarization = Polarization(envelope=self)
         else:
             self.polarization = polarization
@@ -92,19 +97,34 @@ class Envelope:
     def __repr__(self):
         if self.measured:
             return "Envelope already Measured"
-        if (self.composite_matrix is None and
-            self.composite_vector is None):
-            if (self.fock.expansion_level == 0 and
-                self.polarization.expansion_level == 0):
+        if self.composite_matrix is None and self.composite_vector is None:
+            if (
+                self.fock.expansion_level == 0
+                and self.polarization.expansion_level == 0
+            ):
                 return f"{repr(self.fock)} ⊗ {repr(self.polarization)}"
             else:
                 return f"{repr(self.fock)}\n   ⊗\n {repr(self.polarization)}"
         elif self.composite_vector is not None:
             formatted_vector = "\n".join(
-                [f"{complex_num.real:.2f} {'+' if complex_num.imag >= 0 else '-'} {abs(complex_num.imag):.2f}j" for complex_num in self.composite_vector.flatten()])
+                [
+                    f"{complex_num.real:.2f} {'+' if complex_num.imag >= 0 else '-'} {abs(complex_num.imag):.2f}j"
+                    for complex_num in self.composite_vector.flatten()
+                ]
+            )
             return f"{formatted_vector}"
         elif self.composite_matrix is not None:
-            formatted_matrix = "\n".join(["\t".join([f"({num.real:.2f} {'+' if num.imag >= 0 else '-'} {abs(num.imag):.2f}j)" for num in row]) for row in self.composite_matrix])
+            formatted_matrix = "\n".join(
+                [
+                    "\t".join(
+                        [
+                            f"({num.real:.2f} {'+' if num.imag >= 0 else '-'} {abs(num.imag):.2f}j)"
+                            for num in row
+                        ]
+                    )
+                    for row in self.composite_matrix
+                ]
+            )
             return f"{formatted_matrix}"
 
     def combine(self):
@@ -122,16 +142,17 @@ class Envelope:
         while self.fock.expansion_level > self.polarization.expansion_level:
             self.polarization.expand()
 
-        if (self.fock.expansion_level == 1 and
-             self.polarization.expansion_level == 1):
-            self.composite_vector = np.kron(self.fock.state_vector,
-                                            self.polarization.state_vector)
+        if self.fock.expansion_level == 1 and self.polarization.expansion_level == 1:
+            self.composite_vector = np.kron(
+                self.fock.state_vector, self.polarization.state_vector
+            )
             self.fock.extract(0)
             self.polarization.extract(1)
 
         if self.fock.expansion_level == 2 and self.polarization.expansion_level == 2:
-            self.composite_matrix = np.kron(self.fock.density_matrix,
-                                            self.polarization.density_matrix)
+            self.composite_matrix = np.kron(
+                self.fock.density_matrix, self.polarization.density_matrix
+            )
             self.fock.extract(0)
             self.polarization.extract(1)
 
@@ -152,21 +173,26 @@ class Envelope:
 
     def apply_operation(self, operation: GenericOperation):
         from photon_weave.operation.fock_operation import (
-            FockOperation, FockOperationType)
+            FockOperation,
+            FockOperationType,
+        )
         from photon_weave.operation.polarization_operations import (
-            PolarizationOperationType, PolarizationOperation)
+            PolarizationOperationType,
+            PolarizationOperation,
+        )
+
         if isinstance(operation, FockOperation):
-            if (self.composite_vector is None and
-                self.composite_matrix is None):
+            if self.composite_vector is None and self.composite_matrix is None:
                 self.fock.apply_operation(operation)
             else:
                 fock_index = self.fock.index
                 polarization_index = self.polarization.index
                 operation.compute_operator(self.fock.dimensions)
-                operators = [1,1]
+                operators = [1, 1]
                 operators[fock_index] = operation.operator
                 polarization_identity = PolarizationOperation(
-                    operation=PolarizationOperationType.I)
+                    operation=PolarizationOperationType.I
+                )
                 polarization_identity.compute_operator()
                 operators[polarization_index] = polarization_identity.operator
                 operator = np.kron(*operators)
@@ -183,16 +209,13 @@ class Envelope:
                         nf = np.linalg.norm(self.composite_matrix)
                         self.composite_matrix = self.composite_matrix / nf
         if isinstance(operation, PolarizationOperation):
-            if (self.composite_vector is None and
-                self.composite_matrix is None):
+            if self.composite_vector is None and self.composite_matrix is None:
                 self.polarization.apply_operation(operation)
             else:
                 fock_index = self.fock.index
                 polarization_index = self.polarization.index
                 operators = [1, 1]
-                fock_identity = FockOperation(
-                    operation=FockOperationType.Identity
-                )
+                fock_identity = FockOperation(operation=FockOperationType.Identity)
                 fock_identity.compute_operator(self.fock.dimensions)
                 operators[polarization_index] = operation.operator
                 operators[fock_index] = fock_identity.operator
@@ -212,21 +235,23 @@ class Envelope:
             raise EnvelopeAlreadyMeasuredException()
         outcome = None
         if self.composite_vector is not None:
-            dim = [0,0]
+            dim = [0, 0]
             dim[self.fock.index] = int(self.fock.dimensions)
             dim[self.polarization.index] = 2
             matrix_form = self.composite_vector.reshape(dim[0], dim[1])
-            probabilities = np.sum(np.abs(matrix_form)**2,
-                                   axis=self.polarization.index)
-            assert np.isclose(np.sum(probabilities), 1.0), "Probabilities do not sum to 1."
+            probabilities = np.sum(
+                np.abs(matrix_form) ** 2, axis=self.polarization.index
+            )
+            assert np.isclose(
+                np.sum(probabilities), 1.0
+            ), "Probabilities do not sum to 1."
             axis = np.arange(dim[self.fock.index])
             outcome = np.random.choice(axis, p=probabilities)
         elif self.composite_matrix is not None:
-            dim = [0,0]
+            dim = [0, 0]
             dim[self.fock.index] = int(self.fock.dimensions)
             dim[self.polarization.index] = 2
-            tf = self.composite_matrix.reshape(
-                dim[0], dim[1], dim[0], dim[1])
+            tf = self.composite_matrix.reshape(dim[0], dim[1], dim[0], dim[1])
             if self.fock.index == 0:
                 tf = np.trace(tf, axis1=1, axis2=3)
             else:
@@ -234,7 +259,7 @@ class Envelope:
             probabilities = np.abs(np.diagonal(tf))
             axis = np.arange(dim[self.fock.index])
             outcome = np.random.choice(axis, p=probabilities)
-        elif isinstance(self.fock.index, (list, tuple)) and len(self.fock.index)==2:
+        elif isinstance(self.fock.index, (list, tuple)) and len(self.fock.index) == 2:
             outcome = self.composite_envelope.measure()
         else:
             outcome = self.fock.measure(non_destructive)
@@ -256,8 +281,10 @@ class Envelope:
 class EnvelopeAssignedException(Exception):
     pass
 
+
 class EnvelopeAlreadyMeasuredException(Exception):
     pass
+
 
 class MissingWavefunctionParameterException(Exception):
     pass

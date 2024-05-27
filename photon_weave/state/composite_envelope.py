@@ -504,9 +504,10 @@ class CompositeEnvelope:
         return o
         pass
 
-    def _trace_out(self, state):
+    def _trace_out(self, state, destructive=True):
         space_index, subsystem_index = state.index
         dims = [s.dimensions for s in self.states[space_index][1]]
+        print(dims)
         if len(self.states[space_index][1]) < 2:
             return
         if state.expansion_level < ExpansionLevel.Matrix:
@@ -517,8 +518,13 @@ class CompositeEnvelope:
 
         input_str = ""
         output_str = ""
+        input_2_str = ""
+        output_2_str = ""
         reshape_dims = (*dims, *dims)
         c_id = 0
+        c_2_id = 0
+
+        # Build einsum string to trace out the specific system
         for i in range(len(reshape_dims)):
             if i % len(dims) == subsystem_index:
                 input_str += "a"
@@ -528,17 +534,33 @@ class CompositeEnvelope:
                 output_str += char
                 c_id += 1
 
+        for i in range(len(reshape_dims)):
+            if i % len(dims) == subsystem_index:
+                char = letters[c_2_id]
+                input_2_str += char
+                output_2_str += char
+                c_2_id += 1
+            else:
+                input_2_str += "a"
         einsum_str = f"{input_str}->{output_str}"
-
+        einsum_2_str = f"{input_2_str}->{output_2_str}"
+        print(einsum_str)
+        print(einsum_2_str)
+        print(reshape_dims)
         rho = rho.reshape(reshape_dims)
+        #print(rho)
+        traced_out_state = np.einsum(einsum_2_str, rho)
+        traced_out_state = traced_out_state / np.trace(traced_out_state)
         rho = np.einsum(einsum_str, rho)
         new_dims = np.prod(dims) // state.dimensions
         rho = rho.reshape(new_dims, new_dims)
-        self.states[space_index][0] = rho
+        if destructive:
+            self.states[space_index][0] = rho
 
-        self.contract(state)
-        # Update system information post trace-out
-        del self.states[space_index][1][subsystem_index]
+            self.contract(state)
+            # Update system information post trace-out
+            del self.states[space_index][1][subsystem_index]
+        return traced_out_state
 
     @redirect_if_consumed
     def contract(self, state):

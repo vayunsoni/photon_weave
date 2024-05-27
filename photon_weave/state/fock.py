@@ -1,6 +1,7 @@
 """
 Fock state
 """
+
 from __future__ import annotations
 from .envelope import EnvelopeAssignedException
 from .expansion_levels import ExpansionLevel
@@ -8,8 +9,9 @@ from photon_weave.operation.fock_operation import FockOperation, FockOperationTy
 
 import numpy as np
 
+
 class Fock:
-    def __init__(self, envelope: 'Envelope' = None):
+    def __init__(self, envelope: "Envelope" = None):
         """
         Creates Fock object in a vacuum state
         """
@@ -27,18 +29,32 @@ class Fock:
             return f"|{self.label}⟩"
         elif self.state_vector is not None:
             formatted_vector = "\n".join(
-                [f"{complex_num.real:.2f} {'+' if complex_num.imag >= 0 else '-'} {abs(complex_num.imag):.2f}j" for complex_num in self.state_vector.flatten()])
+                [
+                    f"{complex_num.real:.2f} {'+' if complex_num.imag >= 0 else '-'} {abs(complex_num.imag):.2f}j"
+                    for complex_num in self.state_vector.flatten()
+                ]
+            )
 
             return f"{formatted_vector}"
         elif self.density_matrix is not None:
-            formatted_matrix = "\n".join(["\t".join([f"({num.real:.2f} {'+' if num.imag >= 0 else '-'} {abs(num.imag):.2f}j)" for num in row]) for row in self.density_matrix])
+            formatted_matrix = "\n".join(
+                [
+                    "\t".join(
+                        [
+                            f"({num.real:.2f} {'+' if num.imag >= 0 else '-'} {abs(num.imag):.2f}j)"
+                            for num in row
+                        ]
+                    )
+                    for row in self.density_matrix
+                ]
+            )
             return f"{formatted_matrix}"
         elif self.index is not None:
             return "System is part of the Envelope"
         else:
             return "Invalid Fock object"
 
-    def __eq__(self, other: 'Optional'):
+    def __eq__(self, other: "Optional"):
         if not isinstance(other, Fock):
             return False
         if self.label is not None and other.label is not None:
@@ -55,15 +71,16 @@ class Fock:
             return False
         return False
 
-    def assign_envelope(self, envelope:'Envelope'):
+    def assign_envelope(self, envelope: "Envelope"):
         from .envelope import Envelope
+
         assert isinstance(envelope, Envelope)
         if self.envelope is not None:
             raise EnvelopeAssignedException("Envelope can't be reassigned")
         self.envelope = envelope
 
     def expand(self):
-        if self.dimensions < 0 :
+        if self.dimensions < 0:
             self.dimensions = self.label + 3
         if self.expansion_level is ExpansionLevel.Label:
             state_vector = np.zeros(self.dimensions)
@@ -73,8 +90,8 @@ class Fock:
             self.expansion_level = ExpansionLevel.Vector
         elif self.expansion_level is ExpansionLevel.Vector:
             self.density_matrix = np.outer(
-                self.state_vector.flatten(),
-                np.conj(self.state_vector.flatten()))
+                self.state_vector.flatten(), np.conj(self.state_vector.flatten())
+            )
             self.state_vector = None
             self.expansion_level = ExpansionLevel.Matrix
 
@@ -111,9 +128,10 @@ class Fock:
         while self.expansion_level < min_expansion_level:
             self.expand()
 
-
         cutoff_required = operation.cutoff_required(self._num_quanta)
+        print(cutoff_required)
         if cutoff_required > self.dimensions:
+            print("\n RESIZING STATE\n")
             self.resize(cutoff_required)
 
         match operation.operation:
@@ -130,18 +148,26 @@ class Fock:
         returns highest basis with non_zero probability
         """
         if self.state_vector is not None:
-            non_zero_indices = np.nonzero(self.state_vector)[0]  # Get indices of non-zero elements
+            non_zero_indices = np.nonzero(self.state_vector)[
+                0
+            ]  # Get indices of non-zero elements
             highest_non_zero_index_vector = non_zero_indices[-1]
             return highest_non_zero_index_vector
         if self.density_matrix is not None:
             non_zero_rows = np.any(self.density_matrix != 0, axis=1)
             non_zero_cols = np.any(self.density_matrix != 0, axis=0)
 
-            highest_non_zero_index_row = np.where(non_zero_rows)[0][-1] if np.any(non_zero_rows) else None
-            highest_non_zero_index_col = np.where(non_zero_cols)[0][-1] if np.any(non_zero_cols) else None
+            highest_non_zero_index_row = (
+                np.where(non_zero_rows)[0][-1] if np.any(non_zero_rows) else None
+            )
+            highest_non_zero_index_col = (
+                np.where(non_zero_cols)[0][-1] if np.any(non_zero_cols) else None
+            )
 
             # Determine the overall highest index
-            highest_non_zero_index_matrix = max(highest_non_zero_index_row, highest_non_zero_index_col)
+            highest_non_zero_index_matrix = max(
+                highest_non_zero_index_row, highest_non_zero_index_col
+            )
             return highest_non_zero_index_matrix
 
     def _execute_apply(self, operation: FockOperation):
@@ -156,16 +182,14 @@ class Fock:
 
         if operation.renormalize:
             self.normalize()
-        
 
     def normalize(self):
         if self.density_matrix is not None:
             trace_rho = np.trace(self.density_matrix)
-            self.density_matrix = self.density_matrix/trace_rho
+            self.density_matrix = self.density_matrix / trace_rho
         if self.state_vector is not None:
             norm_psi = np.linalg.norm(self.state_vector)
-            self.state_vector = self.state_vector/norm_psi
-
+            self.state_vector = self.state_vector / norm_psi
 
     def resize(self, new_dimensions):
         if self.label is not None:
@@ -173,29 +197,37 @@ class Fock:
             return
         # Pad
         if self.dimensions < new_dimensions:
-            pad_size = new_dimensions - self.dimensions 
+            pad_size = new_dimensions - self.dimensions
             if self.state_vector is not None:
                 self.state_vector = np.pad(
                     self.state_vector,
-                    ((0, pad_size), (0, 0)), 'constant', constant_values=(0,))
+                    ((0, pad_size), (0, 0)),
+                    "constant",
+                    constant_values=(0,),
+                )
             if self.density_matrix is not None:
                 self.density_matrix = np.pad(
                     self.density_matrix,
                     ((0, pad_size), (0, pad_size)),
-                    'constant', constant_values=0)
+                    "constant",
+                    constant_values=0,
+                )
         # Truncate
         elif self.dimensions > new_dimensions:
-            pad_size = new_dimensions - self.dimensions 
+            pad_size = new_dimensions - self.dimensions
             if self.state_vector is not None:
                 if np.all(self.state_vector[new_dimensions:] == 0):
                     self.state_vector = self.state_vector[:new_dimensions]
             if self.density_matrix is not None:
                 bottom_rows_zero = np.all(self.density_matrix[new_dimensions:, :] == 0)
-                right_columns_zero = np.all(self.density_matrix[:, new_dimensions:] == 0)
+                right_columns_zero = np.all(
+                    self.density_matrix[:, new_dimensions:] == 0
+                )
                 if bottom_rows_zero and right_columns_zero:
-                    self.density_matrix = self.density_matrix[:new_dimensions, :new_dimensions]
+                    self.density_matrix = self.density_matrix[
+                        :new_dimensions, :new_dimensions
+                    ]
         self.dimensions = new_dimensions
-
 
     def set_index(self, minor, major=-1):
         if major >= 0:
@@ -214,7 +246,7 @@ class Fock:
                 case ExpansionLevel.Label:
                     outcome = self.label
                 case ExpansionLevel.Vector:
-                    probabilities = np.abs(self.state_vector.flatten())**2
+                    probabilities = np.abs(self.state_vector.flatten()) ** 2
                     outcome = np.random.choice(len(probabilities), p=probabilities)
                 case ExpansionLevel.Matrix:
                     probabilities = np.real(np.diag(self.density_matrix))
@@ -232,6 +264,25 @@ class Fock:
         self.density_matrix = None
         self.index = None
 
+    def get_subspace(self):
+        """
+        Returns the space
+        """
+        if self.index is None:
+            if self.label:
+                self.expand()
+            if self.state_vector:
+                return self.state_vector
+            elif self.density_matrix:
+                return self.density_matrix
+
+        if len(self.index) == 1:
+            # State is in the Envelope
+            pass
+
+        elif len(self.index) == 2:
+            state = self.envelope.composite_envelope._trace_out(self, destructive=False)
+            return state
 
 
 class FockAlreadyMeasuredException(Exception):

@@ -335,7 +335,6 @@ class CompositeEnvelope:
                     identity.compute_operator()
                     identity = identity.operator
                 composite_operator = np.kron(composite_operator, identity)
-
         if self.states[csi][1][0].expansion_level == ExpansionLevel.Vector:
             self.states[csi][0] = composite_operator @ self.states[csi][0]
         elif self.states[csi][1][0].expansion_level == ExpansionLevel.Matrix:
@@ -435,6 +434,7 @@ class CompositeEnvelope:
             outcome_states.append(outcome_state)
         probabilities = np.real(np.array(probabilities))
         probabilities /= probabilities.sum()
+        probabilities = np.round(probabilities, decimals=10)
         chosen_index = np.random.choice(len(probabilities), p=probabilities)
         chosen_state = outcome_states[chosen_index]
         if not non_destructive:
@@ -502,7 +502,6 @@ class CompositeEnvelope:
         self._trace_out(state)
         state._set_measured(remove_composite=False)
         return o
-        pass
 
     def _trace_out(self, state, destructive=True):
         space_index, subsystem_index = state.index

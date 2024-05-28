@@ -266,6 +266,7 @@ class Fock:
         """
         Returns the space
         """
+        print("GET SUBSPACE")
         if self.index is None:
             if not self.label is None:
                 self.expand()
@@ -279,7 +280,6 @@ class Fock:
             pass
 
         elif len(self.index) == 2:
-            print("tracing out")
             state = self.envelope.composite_envelope._trace_out(self, destructive=False)
             return state
 

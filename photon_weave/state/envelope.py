@@ -5,62 +5,35 @@ Envelope
 from __future__ import annotations
 from typing import Optional
 from photon_weave.operation.generic_operation import GenericOperation
+from photon_weave.constants import C0, gaussian
 from enum import Enum, auto
 import numpy as np
+from scipy.integrate import quad
+
+class TemporalProfile(Enum):
+    Gaussian = (gaussian, {'mu':0, 'sigma':1, 'omega':None})
+
+    def __init__(self, func, params):
+        self.func = func
+        self.params = params
+
+    def with_params(self, **kwargs):
+        params = self.params.copy()
+        params.update(kwargs)
+        return TemporalProfileInstance(self.func, params)
 
 
-class WaveFunctionType:
-    Gaussian = auto()
+class TemporalProfileInstance:
+    def __init__(self, func, params):
+        self.func = func
+        self.params = params
 
-
-class WaveFunction:
-    def __init__(
-        self, wave_function_type: WaveFunctionType = WaveFunctionType.Gaussian, **kwargs
-    ):
-        self.wave_function_type = wave_function_type
-        self.kwargs = kwargs
-        self._function = None
-        self.envelope = None
-
-        match wave_function_type:
-            case WaveFunctionType.Gaussian:
-                if "sigma" not in kwargs:
-                    sigma = 1
-
-    def register_envelope(self, envelope):
-        self.envelope = envelope
-
-    @property
-    def function():
-        if self._function is None:
-            self._compute_function()
-        return self._function
-
-    def _compute_function(self):
-        """
-        Compute the function
-        """
-        match self.wave_function_type:
-            case WaveFunctionType.Gaussian:
-                omega = self.envelope.wavelength
-                sigma = self.kwargs["sigma"]
-                self._function = (
-                    lambda t, t0=0: (1 / (sigma * np.sqrt(2 * np.pi))) ** 0.5
-                    * np.exp(-((t - t0) ** 2) / (2 * sigma**2))
-                    * np.exp(1j * omega * t)
-                )
-
-    def overlap(self, other: WaveFunction, delay):
-        """
-        Computes the overlap with another wave function
-        """
-        t = np.linspace(-10, 10, 1000)
-
-        psi = self.function(t)
-        phi = other.function(t, delay)
-
-        overlap = np.trapz(phi.conj() * psi, t)
-        return overlap
+    def get_function(self, t_a, omega_a):
+        params = self.params.copy()
+        params.update({"t_a":t_a, "omega":omega_a})
+        
+        return lambda t: self.func(t, **params)
+        
 
 
 class Envelope:
@@ -69,7 +42,10 @@ class Envelope:
         wavelength: float = 1550,
         fock: Optional["Fock"] = None,
         polarization: Optional["Polarization"] = None,
-        wave_function: WaveFunction = WaveFunction(),
+        temporal_profile: TemporalProfileInstance = TemporalProfile.Gaussian.with_params(
+            mu=0,
+            sigma = 42.45*10**(-15), # 100 fs pulse
+        )
     ):
         if fock is None:
             from .fock import Fock
@@ -91,8 +67,7 @@ class Envelope:
         self.composite_envelope = None
         self.measured = False
         self.wavelength = wavelength
-        self.wave_function = wave_function
-        self.wave_function.register_envelope(self)
+        self.temporal_profile = temporal_profile
 
     def __repr__(self):
         if self.measured:
@@ -277,6 +252,26 @@ class Envelope:
         self.fock._set_measured()
         self.polarization._set_measured()
 
+    def overlap_integral(self, other: Envelope, delay:float, n:float=1):
+        r"""
+        Given delay in [seconds] this method computes overlap of temporal
+        profiles between this envelope and other envelope.
+
+        Args:
+        self (Envelope): Self
+        other (Envelope): Other envelope to compute overlap with
+        delay (float): Delay of the `other`after self
+        Returns:
+        float: overlap factor
+        """
+        f1 = self.temporal_profile.get_function(t_a=0, omega_a=(C0/n)/self.wavelength)
+        f2 = other.temporal_profile.get_function(t_a=delay, omega_a=(C0/n)/other.wavelength)
+        integrand = lambda x: np.conj(f1(x))*f2(x)
+        result, error = quad(integrand, -np.inf, np.inf)
+
+        return result
+        
+
 
 class EnvelopeAssignedException(Exception):
     pass
@@ -285,6 +280,5 @@ class EnvelopeAssignedException(Exception):
 class EnvelopeAlreadyMeasuredException(Exception):
     pass
 
-
-class MissingWavefunctionParameterException(Exception):
+class MissingTemporalProfileArgumentException(Exception):
     pass

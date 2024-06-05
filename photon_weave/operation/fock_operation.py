@@ -5,7 +5,7 @@ from photon_weave.extra import interpreter
 from enum import Enum, auto
 from .generic_operation import GenericOperation
 import numpy as np
-import scipy.linalg as la
+import numpy.linalg as la
 
 class FockOperationType(Enum):
     # implemented

@@ -591,7 +591,7 @@ class TestFock(unittest.TestCase):
         c.combine(env1.polarization, env2.polarization)
 
         # Perform POVM measurement with the defined operators
-        result_index = c.POVM_measureme(
+        result_index = c.POVM_measurement(
             [env1.polarization, env2.polarization],
             [E1, E2]
         )
@@ -616,7 +616,7 @@ class TestFock(unittest.TestCase):
 
         c.combine(env1.polarization, env2.polarization, env3.polarization)
 
-        result_index = c.POVM_measureme(
+        result_index = c.POVM_measurement(
             [env1.polarization, env2.polarization],
             [E1, E2, E3]  # Include E3 to cover the entire space
         )
@@ -643,7 +643,7 @@ class TestFock(unittest.TestCase):
 
         c.combine(env1.polarization, env2.polarization, env3.polarization)
 
-        result_index = c.POVM_measureme(
+        result_index = c.POVM_measurement(
             [env1.polarization, env2.polarization],
             [E1, E2, E3]  # Include E3 to cover the entire space
         )
@@ -667,7 +667,7 @@ class TestFock(unittest.TestCase):
         E2 = np.array([[0, 0], [0, 1/3]])
         E3 = np.eye(2) - E1 - E2 
 
-        c.POVM_measureme(
+        c.POVM_measurement(
             [env1.polarization],
             [E1, E2, E3]
         )

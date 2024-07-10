@@ -40,7 +40,7 @@ class CompositeEnvelope:
                     seen_composite_envelopes.add(e)
             elif isinstance(e, Envelope):
                 if (
-                    not e.composite_envelope is None
+                    e.composite_envelope is not None
                     and e.composite_envelope not in seen_composite_envelopes
                 ):
                     self.states.extend(e.composite_envelope.states)
@@ -222,10 +222,6 @@ class CompositeEnvelope:
         ):
             return
 
-        dimensions = [
-            state.dimensions for state in self.states[composite_state_index][1]
-        ]
-
         new_order = self.states[composite_state_index][1].copy()
         for idx, ordered_state in enumerate(ordered_states):
             if new_order.index(ordered_state) != idx:
@@ -281,8 +277,6 @@ class CompositeEnvelope:
         from photon_weave.operation.composite_operation import CompositeOperation
         from photon_weave.operation.fock_operation import FockOperation
         from photon_weave.operation.polarization_operations import PolarizationOperation
-        from photon_weave.state.composite_envelope import CompositeEnvelope
-        from photon_weave.state.envelope import Envelope
 
         csi = self._find_composite_state_index(states[0])
         if isinstance(operation, FockOperation) or isinstance(
@@ -389,10 +383,6 @@ class CompositeEnvelope:
 
     @redirect_if_consumed
     def POVM_measurement(self, states, operators, non_destructive=False) -> int:
-        from photon_weave.state.envelope import Envelope
-        from photon_weave.state.fock import Fock
-        from photon_weave.state.polarization import Polarization
-
         self.combine(*states)
         self.rearange(*states)
 
@@ -511,7 +501,6 @@ class CompositeEnvelope:
             return
         if state.expansion_level < ExpansionLevel.Matrix:
             self.expand(state)
-        n = len(dims)
         letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
         rho = self.states[space_index][0]
 
@@ -520,8 +509,7 @@ class CompositeEnvelope:
         input_2_str = ""
         output_2_str = ""
         reshape_dims = (*dims, *dims)
-        c_id = 0
-        c_2_id = 0
+
         trace_letters = iter(letters)
 
         # Build einsum string to trace out the specific system
@@ -599,7 +587,6 @@ def pad_operator(operator, state_dimensions, target_index):
     span = 0
     operator_dim = operator.shape[0]
     cumulative_dim = 1
-    i = 0
 
     while cumulative_dim < operator_dim:
         if target_index + span == len(state_dimensions):

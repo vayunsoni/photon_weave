@@ -2,7 +2,6 @@
 Test the Composite Operations
 """
 
-import random
 import unittest
 
 import numpy as np
@@ -18,8 +17,6 @@ from photon_weave.operation.polarization_operations import (
 )
 from photon_weave.state.composite_envelope import CompositeEnvelope
 from photon_weave.state.envelope import Envelope
-from photon_weave.state.fock import Fock
-from photon_weave.state.polarization import Polarization
 
 
 class TestFockOperation(unittest.TestCase):
@@ -39,10 +36,8 @@ class TestFockOperation(unittest.TestCase):
 
         op.operate(env1, env2)
 
-        expected_operator = np.zeros((4, 4), dtype=np.complex_)
-
         self.assertTrue(env1.composite_envelope is env2.composite_envelope)
-        ce = env1.composite_envelope
+
         self.assertAlmostEqual(op.operator[0][0], 1)
         self.assertAlmostEqual(op.operator[1][1], 1 / np.sqrt(2))
         self.assertAlmostEqual(op.operator[1][2], 1j / np.sqrt(2))

@@ -1,7 +1,8 @@
 from enum import Enum, auto
 
 import numpy as np
-import scipy.linalg
+
+from photon_weave._math.ops import _expm
 
 from .generic_operation import GenericOperation
 
@@ -49,18 +50,12 @@ class PolarizationOperation(GenericOperation):
                     )
             case PolarizationOperationType.PS:
                 if "sigma" not in self.kwargs:
-                    raise KeyError(
-                        "The argument 'phi' is required for PS gate"
-                    )
+                    raise KeyError("The argument 'phi' is required for PS gate")
             case PolarizationOperationType.Custom:
                 if "operator" not in self.kwargs:
-                    raise KeyError(
-                        "The argument 'operator' is required for PS gate"
-                    )
-                if self.kwargs.operator.shape() != (2,2):
-                    raise KeyError(
-                        "Custom operator must be 2by2 matrix"
-                    )
+                    raise KeyError("The argument 'operator' is required for PS gate")
+                if self.kwargs.operator.shape() != (2, 2):
+                    raise KeyError("Custom operator must be 2by2 matrix")
 
     def compute_operator(self):
         match self.operation:
@@ -79,24 +74,31 @@ class PolarizationOperation(GenericOperation):
                 self.operator[0][0] = 1
                 self.operator[1][1] = -1
             case PolarizationOperationType.H:
-                self.operator = 1/np.sqrt(2)*np.array([[1, 1], [1, -1]], dtype=np.complex_)
+                self.operator = (
+                    1 / np.sqrt(2) * np.array([[1, 1], [1, -1]], dtype=np.complex_)
+                )
             case PolarizationOperationType.S:
                 self.operator = np.array([[1, 0], [0, 1j]], dtype=np.complex128)
             case PolarizationOperationType.T:
-                self.operator = np.array([[1, 0], [0, np.exp(1j*np.pi/4)]], dtype=np.complex_)
+                self.operator = np.array(
+                    [[1, 0], [0, np.exp(1j * np.pi / 4)]], dtype=np.complex_
+                )
             case PolarizationOperationType.PS:
                 self.operator = np.array(
-                    [[1, 0], [0, np.exp(1j*self.kwargs['phi'])]],
-                    dtype=np.complex_)
+                    [[1, 0], [0, np.exp(1j * self.kwargs["phi"])]], dtype=np.complex_
+                )
             case PolarizationOperationType.RX:
+                theta = self.kwargs["theta"]
                 sigma_x = np.array([[0, 1], [1, 0]], dtype=complex)
-                self.operator = scipy.linalg.expm(-1j*theta*sigma_x/2)
+                self.operator = _expm(-1j * theta * sigma_x / 2)
             case PolarizationOperationType.RY:
+                theta = self.kwargs["theta"]
                 sigma_y = np.array([[0, -1j], [1j, 0]], dtype=complex)
-                self.operator = scipy.linalg.expm(-1j*theta*sigma_y/2)
+                self.operator = _expm(-1j * theta * sigma_y / 2)
             case PolarizationOperationType.RZ:
+                theta = self.kwargs["theta"]
                 sigma_z = np.array([[1, 0], [0, -1]], dtype=complex)
-                self.operator = scipy.linalg.expm(-1j*theta*sigma_z/2)
+                self.operator = _expm(-1j * theta * sigma_z / 2)
             case PolarizationOperationType.U3:
                 theta = self.kwargs["theta"]
                 lambda_ = self.kwargs["lambda"]
@@ -115,7 +117,7 @@ class PolarizationOperation(GenericOperation):
                 self.operator = self.kwargs["operator"]
 
     def expansion_level_required(self, state) -> int:
-        from photon_weave.state.polarization import PolarizationLabel
+        # from photon_weave.state.polarization import PolarizationLabel
 
         match self.operation:
             case PolarizationOperationType.I:

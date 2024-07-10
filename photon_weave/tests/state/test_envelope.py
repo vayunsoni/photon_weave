@@ -6,7 +6,7 @@ from scipy.integrate import quad
 
 from photon_weave.constants import gaussian
 from photon_weave.operation.fock_operation import FockOperation, FockOperationType
-from photon_weave.state.envelope import Envelope, TemporalProfile
+from photon_weave.state.envelope import Envelope
 from photon_weave.state.fock import Fock
 from photon_weave.state.polarization import Polarization, PolarizationLabel
 
@@ -138,7 +138,6 @@ class TestTemporalProfile(unittest.TestCase):
         # Normalization
         overlap = result / np.sqrt(norm1_integral * norm2_integral)
 
-        a = two_gaussian_integral(1, 1, 0, 0, 100, 100)
 
         self.assertAlmostEqual(overlap, 1.0, places=6)
 
@@ -154,13 +153,13 @@ class TestTemporalProfile(unittest.TestCase):
         norm1_integral, _ = quad(lambda x: np.abs(f1(x)) ** 2, -np.inf, np.inf)
         norm2_integral, _ = quad(lambda x: np.abs(f2(x)) ** 2, -np.inf, np.inf)
 
-        norm = norm1_integral * norm2_integral
+
 
         integrand = lambda x: np.conj(f1(x)) * f2(x)
         result, error = quad(integrand, -np.inf, np.inf)
         # Normalization
         overlap = result / np.sqrt(norm1_integral * norm2_integral)
-        print(overlap)
+
         a = two_gaussian_integral(1, 1, 0, 1, 100, 100)
         print(a)
 

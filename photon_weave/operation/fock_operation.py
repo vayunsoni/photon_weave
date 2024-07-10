@@ -147,7 +147,6 @@ class FockOperation(GenericOperation):
             case _:
                 return 1
 
-
     def cutoff_required(self, num_quanta=0) -> int:
         r"""
         Returns the expansion level required

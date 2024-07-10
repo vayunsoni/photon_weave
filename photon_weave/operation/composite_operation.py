@@ -55,7 +55,7 @@ def ensure_composite(func):
             for state in states:
                 existing_envelope.add_envelope(state)
         else:
-            new_envelope = CompositeEnvelope(*states)
+            new_envelope = CompositeEnvelope(*states)  # needs refactoring
         return func(self, *states, **kwargs)
 
     return wrapper

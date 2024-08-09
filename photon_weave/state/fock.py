@@ -1,7 +1,6 @@
 """
-Fock state
+Fock state 
 """
-
 from __future__ import annotations
 
 import numpy as np
@@ -13,12 +12,42 @@ from .expansion_levels import ExpansionLevel
 
 
 class Fock:
-    def __init__(self, envelope: "Envelope" = None):
+    """
+    Fock class
+
+    This class handles the Fock state or points to the
+    Envelope or Composite envelope, which holds the state
+
+    Attributes
+    ----------
+    index: Union[int, Tuple[int]]
+        If Fock space is part of a product space index
+        holds information about the space and subspace index
+        of this state
+    dimension: int
+        The dimensions of the Hilbert space, can be set or is
+        computed on the fly when expanding the state
+    label: int
+        If expansion level is Label then label holds the state
+        (number basis state)
+    state_vector: np.array
+        If expansion level is Vector then state_vector holds
+        the state
+    density_matrix: np.array
+        If expansion level is Matrix then density_matrix holds
+        the state
+    envelope: Envelope
+        If the state is part of a envelope, the envelope attribute
+        holds a reference to the Envelope instance
+    expansion_level: ExpansionLevel
+        Holds information about the expansion level of this system
+    """
+    def __init__(self, envelope: Envelope = None):
         """
         Creates Fock object in a vacuum state
         """
-        self.dimensions = -1
         self.index = None
+        self.dimensions = -1
         self.label = 0
         self.state_vector = None
         self.density_matrix = None
@@ -27,6 +56,9 @@ class Fock:
         self.measured = False
 
     def __repr__(self):
+        """
+        Simple string representation, when printing the Fock state
+        """
         if self.label is not None:
             return f"|{self.label}⟩"
         elif self.state_vector is not None:
@@ -56,7 +88,16 @@ class Fock:
         else:
             return "Invalid Fock object"
 
-    def __eq__(self, other: "Optional"):
+    def __eq__(self, other: Fock):
+        """
+        Comparison operator for the states, returns True if
+        states are expanded to the same level and are not part
+        of the product space
+        Todo
+        ----
+        Method should work for a spaces if they do not have equal
+        expansion level
+        """
         if not isinstance(other, Fock):
             return False
         if self.label is not None and other.label is not None:
@@ -73,7 +114,7 @@ class Fock:
             return False
         return False
 
-    def assign_envelope(self, envelope: "Envelope"):
+    def assign_envelope(self, envelope: Envelope):
         from .envelope import Envelope
 
         assert isinstance(envelope, Envelope)
@@ -82,6 +123,12 @@ class Fock:
         self.envelope = envelope
 
     def expand(self):
+        """
+        Expands the representation. If the state is stored in
+        label then it is expanded to state_vector and if the
+        state is in state_vector, then the state is expanded
+        to the state_matrix
+        """
         if self.dimensions < 0:
             self.dimensions = self.label + 3
         if self.expansion_level is ExpansionLevel.Label:
@@ -97,24 +144,33 @@ class Fock:
             self.state_vector = None
             self.expansion_level = ExpansionLevel.Matrix
 
-    @property
-    def expansion_level_old(self):
-        if self.label is not None:
-            return 0
-        elif self.state_vector is not None:
-            return 1
-        elif self.density_matrix is not None:
-            return 2
-        else:
-            return self.envelope.expansion_level
 
     def extract(self, index: int):
+        """
+        This method is called, when the state is
+        joined into a product space. Then the
+        index is set and the label, density_matrix and
+        state_vector is set to None
+        """
         self.index = index
         self.label = None
         self.density_matrix = None
         self.state_vector = None
 
     def apply_operation(self, operation: FockOperation) -> None:
+        """
+        Applies a specific operation to the state
+
+        Todo
+        ----
+        If the state is in the product space the operation should be
+        Routed to the correct space
+
+        Parameters
+        ----------
+        operation: FockOperation
+            Operation which should be carried out on this state
+        """
         match operation.operation:
             case FockOperationType.Creation:
                 if self.label is not None:
@@ -145,6 +201,7 @@ class Fock:
     @property
     def _num_quanta(self):
         """
+        The highest possible measurement outcome.
         returns highest basis with non_zero probability
         """
         if self.state_vector is not None:
@@ -172,7 +229,11 @@ class Fock:
 
     def _execute_apply(self, operation: FockOperation):
         """
-        Consider GPU
+        Actually executes the operation
+
+        Todo
+        ----
+        Consider using gpu for this operation
         """
         if self.state_vector is not None:
             self.state_vector = operation.operator @ self.state_vector
@@ -184,6 +245,9 @@ class Fock:
             self.normalize()
 
     def normalize(self):
+        """
+        Normalizes the state.
+        """
         if self.density_matrix is not None:
             trace_rho = np.trace(self.density_matrix)
             self.density_matrix = self.density_matrix / trace_rho
@@ -191,7 +255,15 @@ class Fock:
             norm_psi = np.linalg.norm(self.state_vector)
             self.state_vector = self.state_vector / norm_psi
 
-    def resize(self, new_dimensions):
+    def resize(self, new_dimensions:int):
+        """
+        Resizes the state to the new_dimensions
+
+        Parameters
+        ----------
+        new_dimensions: int
+            New size to change to
+        """
         if self.label is not None:
             self.dimensions = new_dimensions
             return
@@ -229,13 +301,45 @@ class Fock:
                     ]
         self.dimensions = new_dimensions
 
-    def set_index(self, minor, major=-1):
+    def set_index(self, minor:int, major:int=-1):
+        """
+        Sets the index, when product space is created, or
+        manipulated
+
+        Parameters
+        ----------
+        minor: int
+            Minor index show the order of tensoring in the space
+        major: int
+            Major index points to the product space when it is in
+            CompositeEnvelope
+        """
         if major >= 0:
             self.index = (major, minor)
         else:
             self.index = minor
 
-    def measure(self, non_destructive=False, remove_composite=True, partial=False):
+    def measure(self, non_destructive=False, remove_composite=True, partial=False) -> int:
+        """
+        Measures the state in the number basis. This Method can be used if the
+        state resides in the Envelope or Composite Envelope
+
+        Parameters
+        ----------
+        non_destructive: bool
+            If True the state won't be destroyed post measurement
+        remove_composite: bool
+            If True and the state is part of the composite envelope
+            the state won't be removed from the composite 
+        partial: bool
+            If true then accompanying Polarization space in the envelop
+            won't be measured
+
+        Returns
+        -------
+        outcome: int
+            Outcome of the measurement
+        """
         if self.measured:
             raise FockAlreadyMeasuredException()
         outcome = None
@@ -257,6 +361,9 @@ class Fock:
         return outcome
 
     def _set_measured(self, **kwargs):
+        """
+        Destroys the state
+        """
         self.measured = True
         self.label = None
         self.expansion_level = None
@@ -264,11 +371,17 @@ class Fock:
         self.density_matrix = None
         self.index = None
 
-    def get_subspace(self):
+    def get_subspace(self) -> np.array:
         """
-        Returns the space
+        Returns the space subspace. If the state is in label representation
+        then it is expanded once. If the state is in product space,
+        then the space will be traced from the product space
+
+        Returns
+        -------
+        state: np.array
+            The state in the numpy array
         """
-        print("GET SUBSPACE")
         if self.index is None:
             if not self.label is None:
                 self.expand()

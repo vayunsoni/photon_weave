@@ -1,9 +1,9 @@
 """
 Polarization State
 """
+from __future__ import annotations
 
 from enum import Enum
-from __future__ import annotations
 
 import numpy as np
 
@@ -48,6 +48,8 @@ class Polarization:
         holds a reference to the Envelope instance
     expansion_level: ExpansionLevel
         Holds information about the expansion level of this system
+    measured: bool
+        If the state was measured than measured is True
     """
     def __init__(
         self,
@@ -61,6 +63,7 @@ class Polarization:
         self.density_matrix = None
         self.envelope = envelope
         self.expansion_level = ExpansionLevel.Label
+        self.measured = True
 
     def __repr__(self):
         if self.label is not None:
@@ -121,12 +124,16 @@ class Polarization:
 
     def extract(self, index: int):
         """
-        Is this method necessary
+        This method is called, when the state is
+        joined into a product space. Then the
+        index is set and the label, density_matrix and
+        state_vector is set to None
         """
         self.index = index
         self.label = None
         self.density_matrix = None
         self.state_vector = None
+
 
     def set_index(self, minor:int, major:int=-1):
         """

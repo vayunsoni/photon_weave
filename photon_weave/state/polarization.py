@@ -3,6 +3,7 @@ Polarization State
 """
 
 from enum import Enum
+from __future__ import annotations
 
 import numpy as np
 
@@ -10,7 +11,9 @@ from .expansion_levels import ExpansionLevel
 
 
 class PolarizationLabel(Enum):
-    # Horizontal Polarization
+    """
+    Labels for the polarization basis states
+    """
     H = "H"
     V = "V"
     R = "R"
@@ -18,6 +21,34 @@ class PolarizationLabel(Enum):
 
 
 class Polarization:
+    """
+    Polarization class
+
+    This class handles the polarization state or points to the
+    Envelope or Composite envelope, which holds the state
+
+    Attributes
+    ----------
+    index: Union[int, Tuple[int]]
+        If polarization is part of a product space index
+        holds information about the space and subspace index
+        of this state
+    dimension: int
+        The dimensions of the Hilbert space (2)
+    label: PolarizationLabel
+        If expansion level is Label then label holds the state
+    state_vector: np.array
+        If expansion level is Vector then state_vector holds
+        the state
+    density_matrix: np.array
+        If expansion level is Matrix then density_matrix holds
+        the state
+    envelope: Envelope
+        If the state is part of a envelope, the envelope attribute
+        holds a reference to the Envelope instance
+    expansion_level: ExpansionLevel
+        Holds information about the expansion level of this system
+    """
     def __init__(
         self,
         polarization: PolarizationLabel = PolarizationLabel.H,
@@ -62,6 +93,9 @@ class Polarization:
             return "Invalid Fock object"
 
     def expand(self):
+        """
+        Expands the representation
+        """
         if self.label is not None:
             match self.label:
                 case PolarizationLabel.H:
@@ -86,18 +120,46 @@ class Polarization:
             self.expansion_level = ExpansionLevel.Matrix
 
     def extract(self, index: int):
+        """
+        Is this method necessary
+        """
         self.index = index
         self.label = None
         self.density_matrix = None
         self.state_vector = None
 
-    def set_index(self, minor, major=-1):
+    def set_index(self, minor:int, major:int=-1):
+        """
+        Sets the index, when product space is created, or
+        manipulated
+
+        Parameters
+        ----------
+        minor: int
+            Minor index show the order of tensoring in the space
+        major: int
+            Major index points to the product space when it is in
+            CompositeEnvelope
+        """
         if major >= 0:
             self.index = (major, minor)
         else:
             self.index = minor
 
-    def apply_operation(self, operation):
+    def apply_operation(self, operation: PolarizationOperation):
+        """
+        Applies a specific operation to the state
+
+        Todo
+        ----
+        If the state is in the product space the operation should be
+        Routed to the correct space
+
+        Parameters
+        ----------
+        operation: PolarizationOperation
+            Operation which should be carried out on this state
+        """
         from photon_weave.operation.polarization_operations import (
             PolarizationOperationType,
         )
@@ -122,9 +184,13 @@ class Polarization:
         operation.compute_operator()
         self._execute_apply(operation)
 
-    def _execute_apply(self, operation):
+    def _execute_apply(self, operation: PolarizationOperation):
         """
-        Consider GPU
+        Actually executes the operation
+
+        Todo
+        ----
+        Consider using gpu for this operation
         """
         if self.expansion_level == 1:
             self.state_vector = operation.operator @ self.state_vector
@@ -133,6 +199,9 @@ class Polarization:
             self.density_matrix @= operation.operator.conj().T
 
     def _set_measured(self, **kwargs):
+        """
+        Destroys the state
+        """
         self.measured = True
         self.label = None
         self.expansion_level = None
@@ -140,5 +209,12 @@ class Polarization:
         self.density_matrix = None
 
     def measure(self, **kwargs):
+        """
+        Measures this state
+
+        Todo
+        ----
+        Needs to be Implemented still 
+        """
         self._set_measured()
         return None

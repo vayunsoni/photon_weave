@@ -75,17 +75,17 @@ class PolarizationOperation(GenericOperation):
                 self.operator[1][1] = -1
             case PolarizationOperationType.H:
                 self.operator = (
-                    1 / np.sqrt(2) * np.array([[1, 1], [1, -1]], dtype=np.complex_)
+                    1 / np.sqrt(2) * np.array([[1, 1], [1, -1]], dtype=np.complex128)
                 )
             case PolarizationOperationType.S:
                 self.operator = np.array([[1, 0], [0, 1j]], dtype=np.complex128)
             case PolarizationOperationType.T:
                 self.operator = np.array(
-                    [[1, 0], [0, np.exp(1j * np.pi / 4)]], dtype=np.complex_
+                    [[1, 0], [0, np.exp(1j * np.pi / 4)]], dtype=np.complex128
                 )
             case PolarizationOperationType.PS:
                 self.operator = np.array(
-                    [[1, 0], [0, np.exp(1j * self.kwargs["phi"])]], dtype=np.complex_
+                    [[1, 0], [0, np.exp(1j * self.kwargs["phi"])]], dtype=np.complex128
                 )
             case PolarizationOperationType.RX:
                 theta = self.kwargs["theta"]

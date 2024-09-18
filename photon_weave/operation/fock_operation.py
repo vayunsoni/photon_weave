@@ -106,7 +106,7 @@ class FockOperation(GenericOperation):
         if self.apply_count > 1:
             self.operator = matrix_power(self.operator, self.apply_count)
 
-    def _create(self, cutoff: int) -> np.ndarray[np.complex_]:
+    def _create(self, cutoff: int) -> np.ndarray[np.complex128]:
         return creation_operator(cutoff=cutoff)
 
     def _destroy(self, cutoff) -> np.ndarray:

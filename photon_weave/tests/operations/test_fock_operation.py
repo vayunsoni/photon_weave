@@ -100,7 +100,7 @@ class TestFockOperation(unittest.TestCase):
         op_create = FockOperation(FockOperationType.Creation, apply_count=5)
         fock.expand()
         fock.apply_operation(op_create)
-        expected_vector = np.array([0, 0, 0, 0, 0, 1], dtype=np.complex_)
+        expected_vector = np.array([0, 0, 0, 0, 0, 1], dtype=np.complex128)
         expected_density_matrix = np.outer(
             expected_vector.flatten(), np.conj(expected_vector.flatten())
         )

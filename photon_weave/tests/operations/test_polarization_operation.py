@@ -74,7 +74,7 @@ class TestPolarizationOperation(unittest.TestCase):
             op = PolarizationOperation(PolarizationOperationType.Y)
             pol.apply_operation(op)
             self.assertTrue(
-                np.allclose(c[1], np.array(pol.state_vector, dtype=np.complex_)),
+                np.allclose(c[1], np.array(pol.state_vector, dtype=np.complex128)),
                 msg=f"Case {c[0]} doesn't produce correct state",
             )
 

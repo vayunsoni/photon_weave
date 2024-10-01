@@ -1,0 +1,51 @@
+on:
+  push:
+    branches:
+      - refractor
+  pull_request:
+    branches:
+      - refractor
+
+jobs:
+  test:
+    if: "!contains(github.event.head_commit.message, 'Update coverage badge')"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+
+      - name: Install dependencies
+        run: |
+          pip install .
+          pip install coverage coverage-badge
+          pip install pytest pytest-cov
+
+      - name: Run tests with coverage
+        run: |
+          coverage run -m pytest
+          coverage report
+
+      - name: Generate coverage badge
+        run: |
+          mkdir -p assets
+          coverage-badge -o assets/coverage.svg -f
+
+      - name: Upload coverage badge
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-badge
+          path: assets/coverage.svg
+
+      - name: Commit coverage badge to repository
+        run: |
+          git config --local user.name "GitHub Actions"
+          git config --local user.email "actions@github.com"
+          git add assets/coverage.svg
+          git commit -m "Update coverage badge"
+          git push origin HEAD:${{ github.ref_name }}

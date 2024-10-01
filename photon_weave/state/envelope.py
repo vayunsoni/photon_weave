@@ -70,7 +70,6 @@ default_temporal_profile = TemporalProfile.Gaussian.with_params(
 
 
 class Envelope:
-
     __slots__ = (
         "uid",
         "state",
@@ -87,7 +86,7 @@ class Envelope:
         wavelength: float = 1550,
         fock: Optional["Fock"] = None,
         polarization: Optional["Polarization"] = None,
-        temporal_profile: TemporalProfileInstance = default_temporal_profile
+        temporal_profile: TemporalProfileInstance = default_temporal_profile,
     ):
         from photon_weave.state.fock import Fock
         from photon_weave.state.polarization import Polarization

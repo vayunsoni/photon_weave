@@ -1,4 +1,4 @@
-[poetry]
+[tool.poetry]
 name = "photon_weave"
 version = "0.0.3"
 description = "A quantum optics simulator for modeling and analysis of quantum systems."
@@ -15,13 +15,13 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
-[poetry.dependencies]
+[tool.poetry.dependencies]
 python = ">= 3.10"
 jax = "*"
 jaxlib = "*"
 # Add other dependencies as required
 
-[poetry.dev-dependencies]
+[tool.poetry.dev-dependencies]
 pytest = "^8.2"
 sphinx = "^7.4"
 sphinx-rtd-theme = "^0.5"

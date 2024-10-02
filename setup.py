@@ -9,5 +9,5 @@ setup(
     description="General Quantum Simulator, with focus on optics",
     license="Apache 2.0",
     packages=find_packages(where="."),
-    install_requires=["jax==0.4.33", "jaxlib==0.4.33"],
+    install_requires=["jax", "jaxlib"],
 )

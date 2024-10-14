@@ -44,6 +44,17 @@ Photon Weave logic is built around quantum state containers. State can be repres
 Photon Weave places a special focus on so called `Envelope`. An `Envelope` represents a pulse of light, where all photons are indistinguishable and have the same polarization, representing $`\mathcal{F}\otimes\mathcal{P}`$ space. At the creation time, when the spaces are separable their states are contained in the respective `Fock` and `Polarization` instances. Along with the states, the `Envelope` contains additional information in the form of wavelength as well as temporal profile. 
 
 ### CompositeEnvelopes
+When envelopes are interacting, for example in the case of beam splitter, the state needs to be joined further. In that situation the appropriate state is pulled from other state containers into a product state. Photon Weave tries to construct minimal product 
+spaces, resulting in joining only the spaces which must be joined together with spaces which are already joined with the afforementioned spaces. This container automates can hold multiple separate product spaces, which can easily be accessed from any of the participating state container instance. Further, `CompositeEnvelope` can be merged with another `CompositeEnvelope`, allowing for joining of states belonging to both Composite Envelopes. Since in principle any rudimentary state can interract with any other state, also `CustomState` instances can be places into a `CompositeEnvelope`.
+
+### Operations
+
+
+### Quantum Channels
+
+
+### Measuring
+
 
 
 

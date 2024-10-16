@@ -3,13 +3,14 @@ title: "Photon-Weave"
 tags:
  - Python
  - Quantum Optics Simulation
- - Quantum
+ - Quantum Physics
+ - Fock Spaces
   
 authors:
  - name: Simon Sekavčnik
     orcid: 0000-0002-1370-9751
     affiliation: 1
- - name: Kareem El-Safty
+ - name: Kareem H. El-Safty
     orcid: 0000-0001-8740-0637
     affiliation: 1
  - name: Janis Nötzel

@@ -7,7 +7,7 @@ long_description= (this_directory / "README.md").read_text()
 
 setup(
     name="photon_weave",
-    version="0.1.2",
+    version="0.1.3",
     author="Simon Sekavčnik, Kareem H. El-Safty, Janis Nötzel"
     author_email="simon.sekavcnik@tum.de",
     description="General Quantum Simulator, with focus on optics",

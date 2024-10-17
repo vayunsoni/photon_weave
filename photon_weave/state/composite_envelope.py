@@ -350,7 +350,7 @@ class ProductState:
             )
 
             # Compute the outcome probability
-            prob_list.append(float(jnp.trace(prob_state_to)))
+            prob_list.append(float(jnp.trace(prob_state_to).real))
 
         # Normalize the probabilities
         probabilities = jnp.array(prob_list)

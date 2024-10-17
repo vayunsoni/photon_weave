@@ -512,7 +512,6 @@ class TestCompositeEnvelopeMeasurementsVectors(unittest.TestCase):
         self.assertFalse(env2.measured)
         self.assertEqual(env1.fock.state, 1)
         self.assertEqual(env2.fock.state, 2)
-        print(ce.product_states[0].state)
         self.assertTrue(
             jnp.allclose(ce.product_states[0].state, jnp.array([[1], [0], [0], [0]]))
         )
@@ -1115,7 +1114,6 @@ class TestPOVMMeasurement(unittest.TestCase):
         C.set_contraction(False)
         outcomes = ce.measure_POVM(operators, env1.fock, destructive=False)
         self.assertEqual(0, outcomes[0])
-        print(ce.product_states[0].state)
         self.assertTrue(
             jnp.allclose(
                 ce.product_states[0].state,

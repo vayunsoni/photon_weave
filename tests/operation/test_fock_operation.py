@@ -463,7 +463,6 @@ class TestExpressionOperator(unittest.TestCase):
             context=context,
         )
         f.apply_operation(op)
-        print(f)
         self.assertTrue(jnp.allclose(f.state, jnp.array([[0], [-1], [0], [0]])))
 
     def test_expression_operator_fock_vector_two_scalers(self) -> None:

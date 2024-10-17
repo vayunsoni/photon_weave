@@ -254,6 +254,7 @@ class FockOperationType(Enum):
 
         assert isinstance(num_quanta, int)
         assert isinstance(state, jnp.ndarray)
+        state = state / jnp.linalg.norm(state)
 
         match self:
             case FockOperationType.Creation:
@@ -269,7 +270,10 @@ class FockOperationType(Enum):
                     num_quanta,
                     threshold,
                 )
-                return [fd.compute_dimensions()]
+                cd = fd.compute_dimensions()
+                if cd < num_quanta + 1:
+                    cd = num_quanta + 1
+                return [cd]
             case FockOperationType.Squeeze:
                 fd = FockDimensions(
                     state,
@@ -277,7 +281,10 @@ class FockOperationType(Enum):
                     num_quanta,
                     threshold,
                 )
-                return [fd.compute_dimensions()]
+                cd = fd.compute_dimensions()
+                if cd < num_quanta + 1:
+                    cd = num_quanta + 1
+                return [cd]
             case FockOperationType.Identity:
                 return [num_quanta + 1]
             case FockOperationType.Expresion:
@@ -287,5 +294,8 @@ class FockOperationType(Enum):
                     num_quanta,
                     threshold,
                 )
-                return [fd.compute_dimensions()]
+                cd = fd.compute_dimensions()
+                if cd < num_quanta + 1:
+                    cd = num_quanta + 1
+                return [cd]
         raise ValueError("Something went wrong in dimension estimation")

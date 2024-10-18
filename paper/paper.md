@@ -4,6 +4,8 @@ tags:
  - Python
  - Quantum Optics Simulation
  - Quantum
+ - Quantum Physics
+ 
   
 authors:
  - name: Simon Sekavčnik

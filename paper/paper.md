@@ -3,22 +3,21 @@ title: "Photon-Weave"
 tags:
  - Python
  - Quantum Optics Simulation
- - Quantum Physics
- - Fock Spaces
+ - Quantum
   
 authors:
  - name: Simon Sekavčnik
    orcid: 0000-0002-1370-9751
    affiliation: 1
- - name: Kareem H. El-Safty
+ - name: Kareem El-Safty
    orcid: 0000-0001-8740-0637
    affiliation: 1
  - name: Janis Nötzel
    orcid: 0000-0003-0091-3072
    affiliation: 1
-affiliation:
- - name: Technical University of Munich, TQSD, Arcißstraße 21
-   index: 1
+affiliations:
+  - name: Technical University of Munich, Theoretical Quantum System Design, Munich, Germany
+    index: 1
 date: 15.10.2024
 bibliography: paper.bib
 ---
@@ -28,7 +27,7 @@ Photon Weave is a quantum systems simulator designed to offer intuitive abstract
 In contracts to other frameworks such as Qiskit [@aleksandrowicz2019qiskit], which are primarily designed for qubit-based computations, Photon Weave excels at simulating continuous-variable quantum systems, mainly photons, as well as custom quantum states that can interact dynamically. Furthermore, Photon Weave offers a balance of flexibility and automation by deferring the joining of quantum spaces until necessary, enhancing computational efficiency. The simulator supports both CPU and GPU execution, ensuring scalability and performance for large-scale simulations. This is achieved by using the JAX[@jax2018github] library.
 
 # Statement of Need
-Tools like QuTiP, Qiskit, Piquasso, and Strawberry Fields [@kolarovszki2024piquassophotonicquantumcomputer,@killoran2019strawberry] already exist for modeling quantum phenomena, but many of them either require extensive user control (QuTiP) or enforce rigid circuit structures (Strawberry Fields). Researchers in quantum optics and related fields need a tool that simplifies photonic systems simulations, supports dynamic interactions between custom quantum systems, and eliminates the need for a circuit model. Such a tool could be used to generate a library of devices and gates that closely model real-world devices, fostering greater collaboration among scientists in those fields.
+Tools like QuTiP, Qiskit, Piquasso, and Strawberry Fields [@kolarovszki2024piquassophotonicquantumcomputer; @killoran2019strawberry] already exist for modeling quantum phenomena, but many of them either require extensive user control (QuTiP) or enforce rigid circuit structures (Strawberry Fields). Researchers in quantum optics and related fields need a tool that simplifies photonic systems simulations, supports dynamic interactions between custom quantum systems, and eliminates the need for a circuit model. Such a tool could be used to generate a library of devices and gates that closely model real-world devices, fostering greater collaboration among scientists in those fields.
 
 # Photon Weave Overview
 Photon Weave is a quantum simulation library designed for simulating any system, provided that simulating hardware meets the resource requirements. With this simulator, users can easily create, manipulate, and measure quantum systems.

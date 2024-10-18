@@ -58,7 +58,7 @@ context = {
    "n": lambda dims: number_operator(dims[0])
 }
 op = Operation(
- FockOperationType.Expression,
+    FockOperationType.Expression,
     expr=("expm", ("s_mult", -1j, jnp.pi, "n")),
     context=context,
 )

@@ -46,7 +46,7 @@ Photon Weave places a particular emphasis on the `Envelope` concept. An `Envelop
 
 
 ### Composite Envelopes
-When envelopes interact, such as at a beam splitter, their states need to be joined. In these cases, the necessary state data is extracted from their respective containers and tensorized into a product state. A `CompositeEnvelope` can contain multiple product spaces, which can be accessed from any of the contributing state containers. Additionally, `CompositeEnvelope` instances can be merged, allowing states within both envelopes to interact. Since any basic state can, in principle, interact with any other state, `CustomState` instances can also be included in a `CompositeEnvelope.`
+When envelopes interact, such as at a beam-splitter [@xiang2002theorem], their states need to be joined. In these cases, the necessary state data is extracted from their respective containers and tensorized into a product state. A `CompositeEnvelope` can contain multiple product spaces, which can be accessed from any of the contributing state containers. Additionally, `CompositeEnvelope` instances can be merged, allowing states within both envelopes to interact. Since any custom state can, in principle, interact with any other state, `CustomState` instances can also be included in a `CompositeEnvelope.`
 
 ### Operations
 Photon Weave provides several ways to perform operations on quantum states. All operations are created using specialized classes (`FockOperation,` `PolarizationOperation,` `CustomStateOperation,` and `CompositeOperation`), each designed to work on a specific type of state. Operations can be predefined, manually constructed, or generated using expressions with a context.

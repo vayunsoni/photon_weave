@@ -43,7 +43,8 @@ Photon Weave's core functionality revolves around quantum state containers. Stat
 - When states are joined, these containers store references to the `Envelope,` `CompositeEnvelope,` or both. This allows each container to understand its place within a larger product space and how it is tensorized.
 
 ### Envelopes
-Photon Weave places a particular emphasis on the `Envelope` concept. An `Envelope` represents a pulse of light, where all photons are indistinguishable and share the same polarization, representing the $`\mathcal{F}\otimes\mathcal{P}`$ space. Initially, their states are stored in the respective `Fock` and `Polarization` containers when the spaces are separable. In addition to the states, an `Envelope` holds essential metadata such as wavelength and temporal profile.
+Photon Weave places a particular emphasis on the `Envelope` concept. An `Envelope` represents a pulse of light, where all photons are indistinguishable and share the same polarization, representing the $\mathcal{F}\otimes\mathcal{P}$ space. Initially, their states are stored in the respective `Fock` and `Polarization` containers when the spaces are separable. In addition to the states, an `Envelope` holds essential metadata such as wavelength and temporal profile.
+
 
 
 ### Composite Envelopes

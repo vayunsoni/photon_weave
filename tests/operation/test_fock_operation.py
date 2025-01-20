@@ -560,9 +560,7 @@ class TestExpressionOperator(unittest.TestCase):
         self.assertTrue(
             jnp.allclose(
                 ce.product_states[0].state,
-                jnp.array(
-                    [[0], [0], [0], [-1], [0], [0], [0], [0], [0], [0], [0], [0]]
-                ),
+                jnp.array([[0], [-1], [0], [0]]),
             )
         )
 
@@ -586,13 +584,13 @@ class TestExpressionOperator(unittest.TestCase):
         self.assertTrue(
             jnp.allclose(
                 ce.product_states[0].state,
-                jnp.array([[1], [0], [0], [0], [0], [0], [0], [0], [0]]),
+                jnp.array([[1], [0], [0], [0]]),
             )
         )
 
 
 class TestCustomFockOperation(unittest.TestCase):
-    def test_custom_opeator_fock_vector(self) -> None:
+    def test_custom_operator_fock_vector(self) -> None:
         f = Fock()
         f.dimensions = 2
         op = Operation(FockOperationType.Custom, operator=jnp.array([[0, 0], [1, 0]]))
@@ -634,8 +632,11 @@ class TestCustomFockOperation(unittest.TestCase):
         ce.combine(env1.fock, env2.fock)
         op = Operation(FockOperationType.Custom, operator=jnp.array([[0, 0], [1, 0]]))
         env1.fock.apply_operation(op)
+        env1.fock.uid = 1
+        env2.fock.uid = 2
+        # print([s.uid for s in ce.product_states[0].state_objs])
         self.assertTrue(
-            jnp.allclose(ce.product_states[0].state, jnp.array([[0], [0], [1], [0]]))
+            jnp.allclose(ce.product_states[0].state, jnp.array([[0], [1], [0], [0]]))
         )
 
     def test_custom_operator_composite_envelope_matrix(self) -> None:
@@ -648,6 +649,9 @@ class TestCustomFockOperation(unittest.TestCase):
         ce.expand(env1.fock)
         op = Operation(FockOperationType.Custom, operator=jnp.array([[0, 0], [1, 0]]))
         env1.fock.apply_operation(op)
+        env1.fock.uid = 1
+        env2.fock.uid = 2
+        # print([s.uid for s in ce.product_states[0].state_objs])
         self.assertTrue(
-            jnp.allclose(ce.product_states[0].state, jnp.array([[0], [0], [1], [0]]))
+            jnp.allclose(ce.product_states[0].state, jnp.array([[0], [1], [0], [0]]))
         )

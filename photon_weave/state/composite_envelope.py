@@ -1,26 +1,31 @@
+from __future__ import annotations
+
+# TODO
+# import inspect
 import uuid
 from dataclasses import dataclass, field
+from functools import reduce
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union, cast
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 # from photon_weave.extra.einsum_constructor import EinsumStringConstructor as ESC
 import photon_weave.extra.einsum_constructor as ESC
-from photon_weave._math.ops import (
-    kraus_identity_check,
-    num_quanta_matrix,
-    num_quanta_vector,
-)
-from photon_weave.operation import (
-    CustomStateOperationType,
-    FockOperationType,
-    Operation,
-    PolarizationOperationType,
-)
+from photon_weave._math.ops import (kraus_identity_check, num_quanta_matrix,
+                                    num_quanta_vector)
+from photon_weave.operation import (CustomStateOperationType,
+                                    FockOperationType, Operation,
+                                    PolarizationOperationType)
 from photon_weave.photon_weave import Config
 from photon_weave.state.expansion_levels import ExpansionLevel
+
+from .utils.measurements import (measure_matrix, measure_POVM_matrix,
+                                 measure_vector)
+from .utils.operations import (apply_kraus_matrix, apply_kraus_vector,
+                               apply_operation_matrix, apply_operation_vector)
+from .utils.state_transform import state_contract, state_expand
+from .utils.trace_out import trace_out_matrix, trace_out_vector
 
 # For static type checks
 if TYPE_CHECKING:
@@ -30,6 +35,43 @@ if TYPE_CHECKING:
     from photon_weave.state.fock import Fock  # pragma: no cover
 
 
+@jax.jit
+def kron_reduce(arrays: list[jnp.ndarray]) -> jnp.ndarray:
+    """
+    Compute the Kronecker product of a sequence of arrays using JAX.
+
+    Parameters:
+    -----------
+    arrays : list or tuple of jax.numpy.ndarray
+        A sequence of 2D arrays (matrices) to compute the Kronecker product.
+
+    Returns:
+    --------
+    jax.numpy.ndarray
+        The Kronecker product of the input arrays as a single matrix.
+        If `arrays` is empty, returns a 1x1 identity matrix.
+
+    Notes:
+    ------
+    - The function uses `reduce` to iteratively compute the Kronecker product
+      of all matrices in `arrays`.
+    - JAX's just-in-time (jit) compilation is applied for optimization.
+    - `jnp.kron` is used to compute the Kronecker product between two matrices.
+
+    Example:
+    --------
+    arrays = [jnp.array([[1, 2], [3, 4]]), jnp.array([[0, 5], [6, 7]])]
+    result = kron_reduce(arrays)
+    print(result)
+    # Output:
+    # [[ 0  5  0 10]
+    #  [ 6  7 12 14]
+    #  [ 0 15  0 20]
+    #  [18 21 24 28]]
+    """
+    return reduce(lambda a, b: jnp.kron(a, b), arrays, jnp.array([[1]]))
+
+
 @dataclass(slots=True)
 class ProductState:
     """
@@ -37,10 +79,10 @@ class ProductState:
     """
 
     expansion_level: ExpansionLevel
-    container: "CompositeEnvelopeContainer"
+    container: CompositeEnvelopeContainer
     uid: uuid.UUID = field(default_factory=uuid.uuid4)
     state: jnp.ndarray = field(default_factory=lambda: jnp.array([[1]]))
-    state_objs: List["BaseState"] = field(default_factory=list)
+    state_objs: List[BaseState] = field(default_factory=list)
 
     def __hash__(self) -> int:
         return hash(self.uid)
@@ -50,8 +92,10 @@ class ProductState:
         Expands the state from vector to matrix
         """
         if self.expansion_level < ExpansionLevel.Matrix:
-            self.state = jnp.outer(self.state.flatten(), jnp.conj(self.state.flatten()))
-            self.expansion_level = ExpansionLevel.Matrix
+            dims = int(jnp.prod(jnp.array([s.dimensions for s in self.state_objs])))
+            self.state, self.expansion_level = state_expand(
+                self.state, self.expansion_level, dims
+            )
             for state in self.state_objs:
                 state.expansion_level = ExpansionLevel.Matrix
 
@@ -65,17 +109,25 @@ class ProductState:
             tolerance when comparing trace
         """
         if self.expansion_level is ExpansionLevel.Matrix:
-            # If the state is mixed, return
-            if jnp.abs(jnp.trace(jnp.matmul(self.state, self.state)) - 1) >= tol:
-                return
+            self.state, self.expansion_level, success = cast(
+                tuple[jnp.ndarray, ExpansionLevel, bool],
+                state_contract(self.state, self.expansion_level),
+            )
+            if success:
+                for state in self.state_objs:
+                    state.expansion_level = ExpansionLevel.Vector
 
-            eigenvalues, eigenvectors = jnp.linalg.eigh(self.state)
-            pure_state_index = jnp.argmax(jnp.abs(eigenvalues - 1.0) < tol)
-            assert pure_state_index is not None, "Pure state indx should not be None"
-            self.state = eigenvectors[:, pure_state_index].reshape(-1, 1)
-            for state in self.state_objs:
-                state.expansion_level = ExpansionLevel.Vector
-            self.expansion_level = ExpansionLevel.Vector
+    @property
+    def size(self) -> int:
+        """
+        Returns the size of the product state
+
+        Returns
+        -------
+        int
+            The size of the product state in bytes
+        """
+        return self.state.nbytes
 
     def reorder(self, *ordered_states: "BaseState") -> None:
         """
@@ -154,142 +206,46 @@ class ProductState:
             Dictionary of outcomes, where the state is key and its outcome measurement
         is the value (int)
         """
-        from photon_weave.state.polarization import Polarization, PolarizationLabel
+        from photon_weave.state.polarization import (Polarization,
+                                                     PolarizationLabel)
 
         assert all(
             so in self.state_objs for so in states
         ), "All state objects need to be in product state"
-        outcomes = {}
+
+        match self.expansion_level:
+            case ExpansionLevel.Vector:
+                outcomes, self.state = measure_vector(
+                    self.state_objs, states, self.state
+                )
+            case ExpansionLevel.Matrix:
+                outcomes, self.state = measure_matrix(
+                    self.state_objs, states, self.state
+                )
+        # Handle post measurement processes
+        for state in states:
+            if destructive:
+                state._set_measured()
+            else:
+                if isinstance(state, Polarization):
+                    if outcomes[state] == 0:
+                        state.state = PolarizationLabel.H
+                    else:
+                        state.state = PolarizationLabel.V
+                else:
+                    state.state = outcomes[state]
+                state.expansion_level = ExpansionLevel.Label
+                state.index = None
+
+        self.state_objs = [s for s in self.state_objs if s not in states]
         C = Config()
-
-        remaining_states = [s for s in self.state_objs]
-
-        if self.expansion_level == ExpansionLevel.Vector:
-            # Get the state and reshape it into tensor
-            shape = [so.dimensions for so in self.state_objs]
-            shape.append(1)
-            ps = self.state.reshape(shape)
-            for idx, state in enumerate(states):
-                # Constructing the einsum str
-                einsum = ESC.measure_vector(remaining_states, [state])
-
-                # Project the state with einsum string
-                projected_state = jnp.einsum(einsum, ps)
-
-                # Outcome Probabilities
-                probabilities = jnp.abs(projected_state.flatten()) ** 2
-                probabilities /= jnp.sum(probabilities)
-
-                # Decide on output
-                key = C.random_key
-                outcomes[state] = int(
-                    jax.random.choice(
-                        key, a=jnp.array(list(range(state.dimensions))), p=probabilities
-                    )
-                )
-
-                # Construct the post measurement state
-                # Even if the state is measured non_destructively
-                # the state is removed and placed back into original
-                # Base state as a label form
-                indices: List[Union[slice, int]] = [slice(None)] * len(ps.shape)
-                indices[remaining_states.index(state)] = outcomes[state]
-                ps = ps[tuple(indices)]
-
-                # Remove the measured state form the product state
-                remaining_states.remove(state)
-
-                # Handle post measurement processes
-                if destructive:
-                    state._set_measured()
-                else:
-                    if isinstance(state, Polarization):
-                        if outcomes[state] == 0:
-                            state.state = PolarizationLabel.H
-                        else:
-                            state.state = PolarizationLabel.V
-                    else:
-                        state.state = outcomes[state]
-                    state.index = None
-                    state.expansion_level = ExpansionLevel.Label
-                self.state_objs.remove(state)
-            if len(self.state_objs) > 0:
-                # Handle reshaping and storing the post measurement product state
-                self.state = ps.reshape(-1, 1)
-                self.state /= jnp.linalg.norm(self.state)
-            else:
-                # Product state will be deleted
-                self.state = jnp.array([[1]])
-        elif self.expansion_level == ExpansionLevel.Matrix:
-            shape = [so.dimensions for so in self.state_objs] * 2
-            ps = self.state.reshape(shape)
-            for idx, state in enumerate(states):
-                # Generate einsum string
-                einsum = ESC.measure_matrix(remaining_states, [state])
-
-                # Project the state with einsum
-                projected_state = jnp.einsum(einsum, ps)
-
-                # Outcome Probabilities
-                probabilities = jnp.abs(jnp.diag(projected_state))
-                probabilities /= sum(probabilities)
-
-                # Decide on outcome
-                key = C.random_key
-                outcomes[state] = int(
-                    jax.random.choice(
-                        key, a=jnp.array(list(range(state.dimensions))), p=probabilities
-                    )
-                )
-
-                # Construct post measurement state
-                # Even if state is measured in non_destructive manner
-                # It is removed from the product state and placed back
-                # into the BaseState
-                state_index = remaining_states.index(state)
-                row_idx = state_index
-                col_idx = state_index + len(remaining_states)
-                indices = [slice(None)] * len(ps.shape)
-                indices[row_idx] = outcomes[state]
-                indices[col_idx] = outcomes[state]
-                ps = ps[tuple(indices)]
-
-                # Remove the mesaured state from the remaining states
-                remaining_states.remove(state)
-                if destructive:
-                    state._set_measured()
-                else:
-                    if isinstance(state, Polarization):
-                        if outcomes[state] == 0:
-                            state.state = PolarizationLabel.H
-                        else:
-                            state.state = PolarizationLabel.V
-                    else:
-                        state.state = outcomes[state]
-                    state.index = None
-                    state.expansion_level = ExpansionLevel.Label
-
-                # Remove the mesaured state from the product state
-                self.state_objs.remove(state)
-
-            # Reconstruct the post measurement product state
-            if len(self.state_objs) > 0:
-                ps = ps.flatten()
-                num_elements = ps.size
-                sqrt = int(jnp.ceil(jnp.sqrt(num_elements)))
-                self.state = ps.reshape((sqrt, sqrt))
-                self.state /= jnp.linalg.norm(self.state)
-            else:
-                self.state = jnp.array([[1]])
-
-        # Attempt to contract to Vector if set so
-        if C.contractions:
+        if C.contractions and len(self.state_objs) > 0:
             self.contract()
         return outcomes
 
     def measure_POVM(
         self,
-        operators: List[Union[np.ndarray, jnp.ndarray]],
+        operators: List[jnp.ndarray],
         *states: "BaseState",
         destructive: bool = True,
     ) -> Tuple[int, Dict["BaseState", int]]:
@@ -298,7 +254,7 @@ class ProductState:
 
         Parameters
         ----------
-        operators: List[Union[np.ndarray, jnp.ndarray]]
+        operators: List[jnp.ndarray]
             List of POVM operators
         *stapartial=partials: BaseState
             List of states, on which the POVM measurement should be executed
@@ -317,65 +273,26 @@ class ProductState:
             POVM operator measurements.
         """
 
+        from photon_weave.state.custom_state import CustomState
+
         # Expand to matrix form if not already in matrix form
         if self.expansion_level == ExpansionLevel.Vector:
             self.expand()
 
-        # Transform the operators to the tensors
-        op_shape = [s.dimensions for s in states] * 2
-
-        # Reshape operators
-        operators = [op.reshape(op_shape) for op in operators]
-
-        # Get and reshape the state
-        ps = self.state.reshape([s.dimensions for s in self.state_objs] * 2)
-
-        # Generate the operators for application of operators
-        einsum = ESC.apply_operator_matrix(self.state_objs, list(states))
-
-        # Get the probabilities
-        prob_list: List[float] = []
-
-        # Get the dimensions of the measured states
-        to_dims = jnp.prod(jnp.array([so.dimensions for so in states]))
-
-        for op in operators:
-            # Apply each operator
-            prob_state = jnp.einsum(einsum, op, ps, jnp.conj(op))
-
-            # Trace out the state to get the probabilities
-            einsum_to = ESC.trace_out_matrix(self.state_objs, list(states))
-            prob_state_to = jnp.einsum(einsum_to, prob_state).reshape(
-                (to_dims, to_dims)
-            )
-
-            # Compute the outcome probability
-            prob_list.append(float(jnp.trace(prob_state_to).real))
-
-        # Normalize the probabilities
-        probabilities = jnp.array(prob_list)
-        probabilities /= jnp.sum(probabilities)
-
-        # Decide on the outcomes
-        C = Config()
-        key = C.random_key
-        outcome = int(
-            jax.random.choice(
-                key,
-                a=jnp.array(list(range(len(operators)))),
-                p=jnp.array(probabilities),
-            )
+        outcome, self.state = measure_POVM_matrix(
+            self.state_objs, states, operators, self.state
         )
 
-        # Construct Post Measurement state
-        new_dims = jnp.prod(jnp.array([s.dimensions for s in self.state_objs]))
-        ps = jnp.einsum(
-            einsum, operators[outcome], ps, jnp.conj(operators[outcome])
-        ).reshape((new_dims, new_dims))
-        self.state = ps / jnp.trace(ps)
         other_outcomes = {}
         if destructive:
-            # Get correct Composite Envelope
+            # Custom State cannot be destroyed
+            for s in states:
+                if isinstance(s, CustomState):
+                    s.state = trace_out_matrix(self.state_objs, [s], self.state)
+                    s.expansion_level = ExpansionLevel.Matrix
+                    s.index = None
+
+            remaining_states = [s for s in self.state_objs if s not in states]
             if isinstance(
                 CompositeEnvelope._instances[self.container.composite_uid], list
             ):
@@ -384,12 +301,17 @@ class ProductState:
                 ][0].measure(*states)
                 for s in states:
                     del other_outcomes[s]
-        if C.contractions:
+            self.state_objs = remaining_states
+
+        C = Config()
+        if C.contractions and len(self.state_objs) > 0:
             self.contract()
         return (outcome, other_outcomes)
 
     def apply_kraus(
-        self, operators: List[Union[np.ndarray, jnp.ndarray]], *states: "BaseState"
+        self,
+        operators: Union[List[jnp.ndarray], Tuple[jnp.ndarray, ...]],
+        *states: "BaseState",
     ) -> None:
         """
         Applies the Kraus oeprators to the selected states, called by the apply_kraus
@@ -403,54 +325,18 @@ class ProductState:
             List of states to apply the operators to, the tensoring order in operators
             must follow the order of the states in this list
         """
-        if self.expansion_level == ExpansionLevel.Vector:
-            # Get the state and reshape it
-            shape = [s.dimensions for s in self.state_objs]
-            shape.append(1)
-            ps = self.state.reshape(shape)
-
-            # Reshape the operators
-            op_shape = [s.dimensions for s in states] * 2
-            operators = [op.reshape(op_shape) for op in operators]
-
-            # Generate einsum
-            einsum = ESC.apply_operator_vector(self.state_objs, list(states))
-
-            # Apply all operators
-            resulting_state = jnp.zeros_like(ps)
-
-            for op in operators:
-                resulting_state += jnp.einsum(einsum, op, ps)
-
-            # Reshape the resulting state back into vector and store it
-            self.state = resulting_state.reshape(-1, 1)
-
-        elif self.expansion_level == ExpansionLevel.Matrix:
-            # Get the state and reshape it
-            ps = self.state.reshape([s.dimensions for s in self.state_objs] * 2)
-
-            # Reshape the operators
-            op_shape = [s.dimensions for s in states] * 2
-            operators = [op.reshape(op_shape) for op in operators]
-
-            # Genetate einsum
-            einsum = ESC.apply_operator_matrix(self.state_objs, list(states))
-
-            # Generate a new state to sum into
-            resulting_state = jnp.zeros_like(ps)
-
-            # Apply all operators
-            for op in operators:
-                resulting_state += jnp.einsum(einsum, op, ps, jnp.conj(op))
-
-            # Compute matrix dimensions
-            dims = jnp.prod(jnp.array([s.dimensions for s in self.state_objs]))
-
-            # Change the state back to the matrix form
-            self.state = resulting_state.reshape(dims, dims)
-            C = Config()
-            if C.contractions:
-                self.contract()
+        match self.expansion_level:
+            case ExpansionLevel.Vector:
+                self.state = apply_kraus_vector(
+                    self.state_objs, states, self.state, operators
+                )
+            case ExpansionLevel.Matrix:
+                self.state = apply_kraus_matrix(
+                    self.state_objs, states, self.state, operators
+                )
+                C = Config()
+                if C.contractions:
+                    self.contract()
 
     def trace_out(self, *states: "BaseState") -> jnp.ndarray:
         """
@@ -468,36 +354,13 @@ class ProductState:
             Traced out system including only the requested states in tesored
             in the order in which the states are given
         """
-        if self.expansion_level == ExpansionLevel.Vector:
-            # Reshape the vector into tensor
-            shape = [s.dimensions for s in self.state_objs] + [1]
-            ps = self.state.reshape(shape)
+        match self.expansion_level:
+            case ExpansionLevel.Vector:
+                return trace_out_vector(self.state_objs, list(states), self.state)
+            case ExpansionLevel.Matrix:
+                return trace_out_matrix(self.state_objs, list(states), self.state)
 
-            # Compute einsum string
-            einsum = ESC.trace_out_vector(self.state_objs, list(states))
-
-            # Perform the tracing
-            traced_out_state = jnp.einsum(einsum, ps)
-
-            # Reshape and return
-            return traced_out_state.reshape((-1, 1))
-        elif self.expansion_level == ExpansionLevel.Matrix:
-            # Reshape the matrix into tensor
-            ps = self.state.reshape([s.dimensions for s in self.state_objs] * 2)
-
-            # Generate einsum string
-            einsum = ESC.trace_out_matrix(self.state_objs, list(states))
-
-            # Perform the tracing
-            traced_out_state = jnp.einsum(einsum, ps)
-
-            # Compute the new dimensions
-            new_dims = jnp.prod(jnp.array([s.dimensions for s in states]))
-
-            # Reshape and Return
-            return traced_out_state.reshape((new_dims, new_dims))
-        else:
-            raise ValueError("Something went wrong")  # pragma: no cover
+        return jnp.ndarray([[1]])
 
     @property
     def is_empty(self) -> bool:
@@ -618,13 +481,18 @@ class ProductState:
         from photon_weave.state.fock import Fock
         from photon_weave.state.polarization import Polarization
 
+        if not jnp.any(jnp.abs(self.state) > 0):
+            raise ValueError("The state is invalid" "State 0")
+
         if isinstance(operation._operation_type, FockOperationType):
             assert isinstance(states[0], Fock)
             assert len(states) == 1
             to = states[0].trace_out()
             assert isinstance(to, jnp.ndarray)
             operation.compute_dimensions(states[0]._num_quanta, to)
-            states[0].resize(operation.dimensions[0])
+            # TODO
+            _ = states[0].resize(operation.dimensions[0])
+
         elif isinstance(operation._operation_type, PolarizationOperationType):
             assert isinstance(states[0], Polarization)
             assert len(states) == 1
@@ -646,71 +514,45 @@ class ProductState:
                     s, op_type.expected_base_state_types[i]  # type: ignore
                 )
             operation.compute_dimensions(
-                [s._num_quanta if isinstance(s, Fock) else 0 for s in states],
+                [
+                    s._num_quanta if isinstance(s, Fock) else s.dimensions
+                    for s in states
+                ],
                 [s.trace_out() for s in states],  # type: ignore
             )
             for i, s in enumerate(states):
                 if isinstance(s, Fock):
                     s.resize(operation._dimensions[i])
 
-        shape = [so.dimensions for so in self.state_objs]
-        if self.expansion_level == ExpansionLevel.Vector:
-            assert isinstance(self.state, jnp.ndarray)
-            dims = jnp.prod(jnp.array([so.dimensions for so in self.state_objs]))
-            assert self.state.shape == (dims, 1)
-
-            # Get the Reshaped state
-            shape.append(1)
-            ps = self.state.reshape(shape)
-
-            # Get the operator and Reshape it
-            operator = operation.operator.reshape([s.dimensions for s in states] * 2)
-
-            # Generate the Einstein sum string
-            einsum = ESC.apply_operator_vector(self.state_objs, list(states))
-
-            # Constructing einsum string
-            ps = jnp.einsum(einsum, operator, ps)
-
-            if not jnp.any(jnp.abs(ps) > 0):
-                raise ValueError(
-                    "The state is entirely composed of zeros, "
-                    "is |0⟩ attempted to be annihilated?"
+        match self.expansion_level:
+            case ExpansionLevel.Vector:
+                self.state = apply_operation_vector(
+                    self.state_objs, states, self.state, operation.operator
                 )
-            if operation.renormalize:
-                ps = ps / jnp.linalg.norm(ps)
-            self.state = ps.reshape((-1, 1))
-        elif self.expansion_level == ExpansionLevel.Matrix:
-            assert isinstance(self.state, jnp.ndarray)
-            dims = jnp.prod(jnp.array([so.dimensions for so in self.state_objs]))
-            assert self.state.shape == (dims, dims)
-
-            # Get the State and Reshape it
-            ps = self.state.reshape([*shape, *shape])
-
-            # Get the operator and Reshape it
-            operator = operation.operator.reshape([s.dimensions for s in states] * 2)
-
-            # Generate Einstein sum string
-            einsum = ESC.apply_operator_matrix(self.state_objs, list(states))
-
-            # Apply the Einstein Summation
-            ps = jnp.einsum(einsum, operator, ps, jnp.conj(operator))
-
-            if not jnp.any(jnp.abs(ps) > 0):
-                raise ValueError(
-                    "The state is entirely composed of zeros,"
-                    "is |0⟩ attempted to be annihilated?"
+            case ExpansionLevel.Matrix:
+                self.state = apply_operation_matrix(
+                    self.state_objs, states, self.state, operation.operator
                 )
-            if operation.renormalize:
-                ps = ps / jnp.linalg.norm(ps)
+        if not jnp.any(jnp.abs(self.state) > 0):
+            raise ValueError(
+                "The state is entirely composed of zeros, "
+                "is |0⟩ attempted to be annihilated?"
+            )
+        if operation.renormalize:
+            self.state = self.state / jnp.linalg.norm(self.state)
 
-            # Reshape back into 2d Matrix
-            dims = jnp.prod(jnp.array([so.dimensions for so in self.state_objs]))
-            self.state = ps.reshape((dims, dims))
-            C = Config()
-            if C.contractions:
-                self.contract()
+        # Reduce unneeded dimensionality of Fock spaces
+        for so in self.state_objs:
+            if isinstance(so, Fock):
+                match so.expansion_level:
+                    case ExpansionLevel.Vector:
+                        num_quanta = max(1, num_quanta_vector(so.trace_out()))
+                    case ExpansionLevel.Matrix:
+                        num_quanta = max(1, num_quanta_matrix(so.trace_out()))
+                so.resize(num_quanta + 1)
+        C = Config()
+        if C.contractions:
+            self.contract()
 
 
 @dataclass(slots=True)
@@ -722,7 +564,7 @@ class CompositeEnvelopeContainer:
 
     def append_states(self, other: "CompositeEnvelopeContainer") -> None:
         """
-        Appnds the states of two composite envelope containers
+        Appends the states of two composite envelope containers
         Parameters
         ----------
         other: CompositeEnvelopeContainer
@@ -866,6 +708,7 @@ class CompositeEnvelope:
     def contract(self, *state_objs: "BaseState") -> None:
         pass
 
+    # @timing_decorator
     def combine(self, *state_objs: "BaseState") -> None:
         """
         Combines given states into a product state.
@@ -875,17 +718,19 @@ class CompositeEnvelope:
         state_objs: BaseState
            Accepts many state_objs
         """
-        from photon_weave.state.base_state import BaseState
         from photon_weave.state.envelope import Envelope
 
-        # Check for the types
-        for so in state_objs:
-            assert isinstance(so, BaseState), f"got {type(so)}, expected BaseState"
+        # stack = inspect.stack()
+        # caller_frame = stack[1]
+        # TODO
+        # caller_function = caller_frame.function
+        # caller_filename = caller_frame.filename
+        # caller_line_number = caller_frame.lineno
 
-        # Check if the states are already in the same product space
+        state_objs_set = set(state_objs)
         for ps in self.states:
-            if all(s in ps.state_objs for s in state_objs):
-                return
+            if state_objs_set.issubset(ps.state_objs):
+                return  # Early exit on first match
 
         # Check if all states are included in composite envelope
         assert all(s in self.state_objs for s in state_objs)
@@ -927,64 +772,46 @@ class CompositeEnvelope:
                 assert isinstance(obj.expansion_level, ExpansionLevel)
                 while obj.expansion_level < minimum_expansion_level:
                     assert isinstance(obj.envelope, Envelope)
-                    obj.envelope.expand()
-
+                    obj.expand()
         """
         Assemble all of the density matrices,
         and compile the indices in order
         """
-        state_vector_or_matrix = jnp.array([[1]])
+
+        kron_arrays = []
         state_order = []
-        target_state_objs = [so for so in state_objs]
+
+        # Collect arrays from new existing_product_states
         for product_state in existing_product_states:
-            state_vector_or_matrix = jnp.kron(
-                state_vector_or_matrix, product_state.state
-            )
+            kron_arrays.append(product_state.state)
             state_order.extend(product_state.state_objs)
             product_state.state_objs = []
-        for so in target_state_objs:
+            product_state.state = jnp.array([[1]])
+
+        # Collect arrays from new state objects
+        for so in state_objs:
             if (
                 hasattr(so, "envelope")
                 and so.envelope is not None
                 and so.index is not None
+                and so.envelope.state is not None
                 and not isinstance(so.index, tuple)
             ):
-                assert isinstance(so.envelope.state, jnp.ndarray)
-                if minimum_expansion_level is ExpansionLevel.Vector:
-                    assert so.envelope.state.shape == (so.envelope.dimensions, 1)
-                    state_vector_or_matrix = jnp.kron(
-                        state_vector_or_matrix, so.envelope.state
-                    )
-                    so.envelope.state = None
-                else:
-                    assert so.envelope.state.shape == (
-                        so.envelope.dimensions,
-                        so.envelope.dimensions,
-                    )
-                    state_vector_or_matrix = jnp.kron(
-                        state_vector_or_matrix, so.envelope.state
-                    )
-                    so.envelope.state = None
-                indices: List[Optional[BaseState]] = [None, None]
-                assert isinstance(so.envelope.fock.index, int)
-                assert isinstance(so.envelope.polarization.index, int)
-                indices[so.envelope.fock.index] = so.envelope.fock
-                indices[so.envelope.polarization.index] = so.envelope.polarization
-                assert all(
-                    x is not None for x in indices
-                ), "Indices must not be None at this point"
-                state_order.extend(cast(List["BaseState"], indices))
-            if so.index is None:
+                kron_arrays.append(so.envelope.state)
+                indices: List[Optional["BaseState"]] = [None, None]
+                if isinstance(so.envelope.fock.index, int):
+                    indices[so.envelope.fock.index] = so.envelope.fock
+                if isinstance(so.envelope.polarization.index, int):
+                    indices[so.envelope.polarization.index] = so.envelope.polarization
+                state_order.extend([index for index in indices if index is not None])
+                so.envelope.state = None
+            elif so.index is None:
                 assert isinstance(so.state, jnp.ndarray)
-                if minimum_expansion_level is ExpansionLevel.Vector:
-                    assert so.state.shape == (so.dimensions, 1)
-                    state_vector_or_matrix = jnp.kron(state_vector_or_matrix, so.state)
-                else:
-                    assert so.state.shape == (so.dimensions, so.dimensions)
-                    state_vector_or_matrix = jnp.kron(state_vector_or_matrix, so.state)
-                so.state = None
+                kron_arrays.append(so.state)
                 state_order.append(so)
+                so.state = None
 
+        state_vector_or_matrix = kron_reduce(kron_arrays)
         """
         Create a new product state object and append it to the states
         """
@@ -1020,6 +847,15 @@ class CompositeEnvelope:
         for ps in self.states:
             if all(s in ps.state_objs for s in ordered_states):
                 states_are_combined
+
+        # TODO
+        # stack = inspect.stack()
+
+        # caller_frame = stack[1]
+
+        # caller_function = caller_frame.function
+        # caller_filename = caller_frame.filename
+        # caller_line_number = caller_frame.lineno
         if not states_are_combined:
             self.combine(*ordered_states)
 
@@ -1041,7 +877,7 @@ class CompositeEnvelope:
     def measure(
         self,
         *states: "BaseState",
-        separate_measurement: bool = False,
+        separate_measurement: bool = True,
         destructive: bool = True,
     ) -> Dict["BaseState", int]:
         """
@@ -1148,7 +984,7 @@ class CompositeEnvelope:
 
     def measure_POVM(
         self,
-        operators: List[Union[np.ndarray, jnp.ndarray]],
+        operators: List[jnp.ndarray],
         *states: "BaseState",
         destructive: bool = True,
     ) -> Tuple[int, Dict["BaseState", int]]:
@@ -1157,7 +993,7 @@ class CompositeEnvelope:
 
         Parameters
         ----------
-        operators: List[Union[np.ndarray, jnp.ndarray]]
+        operators: List[jnp.ndarray]
             List of POVM operators
         *states: List[Union[Fock, Polarization]]
             List of states, on which the POVM measurement should be executed
@@ -1205,7 +1041,7 @@ class CompositeEnvelope:
 
     def apply_kraus(
         self,
-        operators: List[Union[np.ndarray, jnp.ndarray]],
+        operators: List[jnp.ndarray],
         *states: "BaseState",
         identity_check: bool = True,
     ) -> None:
@@ -1218,7 +1054,7 @@ class CompositeEnvelope:
 
         Parameters
         ----------
-        operators: List[Union[np.ndarray, jnp.ndarray]]
+        operators: List[jnp.ndarray]
             List of all Kraus operators
         *states: BaseState
             List of the states, that the channel should be applied to
@@ -1247,7 +1083,6 @@ class CompositeEnvelope:
         if identity_check:
             if not kraus_identity_check(operators):
                 raise ValueError("Kraus operators do not sum to the identity")
-
         # Get product states
         product_states = [
             p for p in self.states if any(so in p.state_objs for so in states)
@@ -1277,7 +1112,6 @@ class CompositeEnvelope:
             ps = [p for p in self.states if any(so in p.state_objs for so in states)][0]
         else:
             ps = product_states[0]
-
         # Make sure the order of the states in tensoring is correct
         self.reorder(*states)
 
@@ -1317,7 +1151,8 @@ class CompositeEnvelope:
             ), "Only one product state should exist at this point"
         ps = product_states[0]
 
-        self.reorder(*states)
+        if len(states) > 1:
+            self.reorder(*states)
 
         return ps.trace_out(*states)
 
@@ -1379,7 +1214,6 @@ class CompositeEnvelope:
         states: BaseState
             States onto which the operator should be applied
         """
-
         if len(states) == 1:
             if not isinstance(states[0].index, tuple):
                 assert hasattr(states[0], "apply_operation")

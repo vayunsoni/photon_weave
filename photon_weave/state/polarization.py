@@ -9,7 +9,6 @@ import uuid
 from enum import Enum
 from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
-import jax
 import jax.numpy as jnp
 
 from photon_weave.operation import PolarizationOperationType
@@ -17,6 +16,10 @@ from photon_weave.photon_weave import Config
 
 from .base_state import BaseState
 from .expansion_levels import ExpansionLevel
+from .utils.measurements import measure_matrix, measure_vector
+from .utils.operations import apply_operation_matrix, apply_operation_vector
+from .utils.routing import route_operation
+from .utils.state_transform import state_contract, state_expand
 
 if TYPE_CHECKING:
     from photon_weave.operation import Operation
@@ -36,6 +39,8 @@ class PolarizationLabel(Enum):
     V = "V"
     R = "R"
     L = "L"
+    A = "A"
+    D = "D"
 
 
 class Polarization(BaseState):
@@ -77,9 +82,6 @@ class Polarization(BaseState):
         polarization: PolarizationLabel = PolarizationLabel.H,
         envelope: Union["Envelope", None] = None,
     ):
-        # from photon_weave.state.composite_envelope import CompositeEnvelope
-        # from photon_weave.state.envelope import Envelope
-
         self.uid: uuid.UUID = uuid.uuid4()
         logger.info("Creating polarization with uid %s", self.uid)
         self.index: Optional[Union[int, Tuple[int, int]]] = None
@@ -108,26 +110,21 @@ class Polarization(BaseState):
             "Dimensions can not be set for Polarization type, 2 by default"
         )
 
+    @route_operation()
     def expand(self) -> None:
         """
         Expands the representation
         If current representation is label, then it gets
         expanded to state_vector and if it is state_vector
         then it gets expanded to density matrix
+
+        Notes
+        -----
+        Method is decorated with route_operation. If the state is
+        contained in the product state, the corresponding operation
+        will be executed in the state container, which contains this
+        state.
         """
-        from photon_weave.state.composite_envelope import CompositeEnvelope
-
-        # If the state is in composite envelope expand the product space there
-        if isinstance(self.index, tuple) or isinstance(self.index, list):
-            assert isinstance(self.composite_envelope, CompositeEnvelope)
-            self.composite_envelope.expand(self)
-            return
-        # If the state is in envelope expand the product space there
-        elif isinstance(self.index, int):
-            assert isinstance(self.envelope, Envelope)
-            self.envelope.expand()
-            return
-
         if self.expansion_level == ExpansionLevel.Label:
             assert isinstance(self.state, PolarizationLabel)
             vector: List[Union[jnp.ndarray, float, complex]]
@@ -142,14 +139,20 @@ class Polarization(BaseState):
                 case PolarizationLabel.L:
                     # Left circular polarization = (1/sqrt(2)) * (|H⟩ - i|V⟩)
                     vector = [1 / jnp.sqrt(2), -1j / jnp.sqrt(2)]
-            self.state = jnp.array(vector)[:, jnp.newaxis]
+                case PolarizationLabel.A:
+                    vector = [1 / jnp.sqrt(2), -1 / jnp.sqrt(2)]
+                case PolarizationLabel.D:
+                    vector = [1 / jnp.sqrt(2), 1 / jnp.sqrt(2)]
+            self.state = jnp.array(vector, dtype=jnp.complex128)[:, jnp.newaxis]
             self.expansion_level = ExpansionLevel.Vector
-        elif self.expansion_level == ExpansionLevel.Vector:
+        else:
             assert isinstance(self.state, jnp.ndarray)
-            assert self.state.shape == (self.dimensions, 1)
-            self.state = jnp.dot(self.state, jnp.conj(self.state.T))
-            self.expansion_level = ExpansionLevel.Matrix
+            assert isinstance(self.expansion_level, ExpansionLevel)
+            self.state, self.expansion_level = state_expand(
+                self.state, self.expansion_level, self.dimensions
+            )
 
+    @route_operation()
     def contract(
         self, final: ExpansionLevel = ExpansionLevel.Label, tol: float = 1e-6
     ) -> None:
@@ -162,45 +165,26 @@ class Polarization(BaseState):
             Expected expansion level after contraction
         tol: float
             Tolerance when comparing matrices
-        """
-        from photon_weave.state.envelope import Envelope
 
+        Notes
+        -----
+        Method is decorated with route_operation. If the state is
+        contained in the product state, the corresponding operation
+        will be executed in the state container, which contains this
+        state.
+        """
         # If state was measured, then do nothing
         if self.measured:
-            return
-        # If state is in composite envelope conract product state there
-        if isinstance(self.index, tuple) or isinstance(self.index, list):
-            assert isinstance(self.composite_envelope, CompositeEnvelope)
-            self.composite_envelope.contract(self)
-            return
-        # If state is in envelope conract product state there
-        elif isinstance(self.index, int):
-            assert isinstance(self.envelope, Envelope)
-            self.envelope.contract()
             return
 
         if (
             self.expansion_level is ExpansionLevel.Matrix
             and final < ExpansionLevel.Matrix
         ):
-            # Check if the state is pure state
-            assert isinstance(self.state, jnp.ndarray)
-            assert self.state.shape == (self.dimensions, self.dimensions)
-            state_squared = jnp.matmul(self.state, self.state)
-            state_trace = jnp.trace(state_squared)
-            if jnp.abs(state_trace - 1) < tol:
-                # The state is pure
-                eigenvalues, eigenvectors = jnp.linalg.eigh(self.state)
-                pure_state_index = jnp.argmax(jnp.abs(eigenvalues - 1.0) < tol)
-                assert (
-                    pure_state_index is not None
-                ), "pure_state_index should not be None"
-                self.state = eigenvectors[:, pure_state_index].reshape(-1, 1)
-                # Normalizing the phase
-                assert isinstance(self.state, jnp.ndarray)
-                phase = jnp.exp(-1j * jnp.angle(self.state[0]))
-                self.state = self.state * phase
-                self.expansion_level = ExpansionLevel.Vector
+            assert isinstance(self.state, (jnp.ndarray, int))
+            self.state, self.expansion_level, success = state_contract(  # type: ignore
+                self.state, self.expansion_level
+            )
         if (
             self.expansion_level is ExpansionLevel.Vector
             and final < ExpansionLevel.Vector
@@ -219,7 +203,16 @@ class Polarization(BaseState):
                 self.state, jnp.array([[1 / jnp.sqrt(2)], [-1j / jnp.sqrt(2)]])
             ):
                 self.state = PolarizationLabel.L
-            self.expansion_level = ExpansionLevel.Label
+            elif jnp.allclose(
+                self.state, jnp.array([[1 / jnp.sqrt(2)], [-1 / jnp.sqrt(2)]])
+            ):
+                self.state = PolarizationLabel.A
+            elif jnp.allclose(
+                self.state, jnp.array([[1 / jnp.sqrt(2)], [1 / jnp.sqrt(2)]])
+            ):
+                self.state = PolarizationLabel.D
+            if isinstance(self.state, PolarizationLabel):
+                self.expansion_level = ExpansionLevel.Label
 
     def extract(self, index: Union[int, Tuple[int, int]]) -> None:
         """
@@ -265,6 +258,7 @@ class Polarization(BaseState):
         self.index = None
         self.expansion_level = None
 
+    @route_operation()
     def measure(
         self, separate_measurement: bool = False, destructive: bool = True
     ) -> Dict[BaseState, int]:
@@ -277,58 +271,44 @@ class Polarization(BaseState):
         separate_measurement: bool
 
         Returns
-        ----
+        -------
         Union[int,None]
             Measurement Outcome
+
+        Notes
+        -----
+        Method is decorated with route_operation. If the state is
+        contained in the product state, the corresponding operation
+        will be executed in the state container, which contains this
+        state.
         """
-        from photon_weave.state.composite_envelope import CompositeEnvelope
-
-        # If the state is in the envelope, measure there
-        if isinstance(self.index, int):
-            assert isinstance(self.envelope, Envelope)
-            return self.envelope.measure(
-                self, separate_measurement=separate_measurement, destructive=destructive
-            )
-
-        # If the state is in the composite envelope, measure there
-        if isinstance(self.index, tuple) or isinstance(self.index, list):
-            assert isinstance(self.composite_envelope, CompositeEnvelope)
-            return self.composite_envelope.measure(self)
-
-        results: Dict[BaseState, int] = {}
-        C = Config()
         if self.expansion_level == ExpansionLevel.Label:
             self.expand()
-        if self.expansion_level == ExpansionLevel.Vector:
-            assert isinstance(self.state, jnp.ndarray)
-            assert self.state.shape == (self.dimensions, 1)
-            prob_0 = jnp.abs(self.state[0]) ** 2
-            prob_1 = jnp.abs(self.state[1]) ** 2
-            assert jnp.isclose(prob_0 + prob_1, 1.0)
-            probs = jnp.array([prob_0[0], prob_1[0]])
-            key = C.random_key
-            outcome = jax.random.choice(key, a=jnp.array([0, 1]), p=probs.ravel())
-            results[self] = int(outcome)
-        elif self.expansion_level == ExpansionLevel.Matrix:
-            assert isinstance(self.state, jnp.ndarray)
-            assert self.state.shape == (self.dimensions, self.dimensions)
-            probabilities = jnp.diag(self.state).real
-            probabilities = probabilities / jnp.sum(probabilities)
-            # Generate a random key
-            key = C.random_key
-            outcome = jax.random.choice(
-                key, a=jnp.arange(self.state.shape[0]), p=probabilities
-            )
-            results[self] = int(outcome)
-        if results[self] == 0:
+
+        match self.expansion_level:
+            case ExpansionLevel.Vector:
+                assert isinstance(self.state, jnp.ndarray)
+                outcomes, post_measurement_state = measure_vector(
+                    [self], [self], self.state
+                )
+            case ExpansionLevel.Matrix:
+                assert isinstance(self.state, jnp.ndarray)
+                outcomes, post_measurement_state = measure_matrix(
+                    [self], [self], self.state
+                )
+        # Reconstruct the state post measurement
+        if outcomes[self] == 0:
             self.state = PolarizationLabel.H
-        elif results[self] == 1:
+        elif outcomes[self] == 1:
             self.state = PolarizationLabel.V
         self.expansion_level = ExpansionLevel.Label
+
         if destructive:
             self._set_measured()
-        return results
 
+        return outcomes
+
+    @route_operation()
     def apply_operation(self, operation: Operation) -> None:
         """
         Applies an operation to the state. If state is in some product
@@ -339,55 +319,42 @@ class Polarization(BaseState):
         ----------
         operation: Operation
             Operation with operation type: PolarizationOperationType
+
+        Notes
+        -----
+        Method is decorated with route_operation. If the state is
+        contained in the product state, the corresponding operation
+        will be executed in the state container, which contains this
+        state.
         """
-        from photon_weave.state.composite_envelope import CompositeEnvelope
-        from photon_weave.state.envelope import Envelope
-
         assert isinstance(operation._operation_type, PolarizationOperationType)
-
-        if isinstance(self.index, int):
-            assert isinstance(self.envelope, Envelope)
-            self.envelope.apply_operation(operation, self)
-            return
-        elif isinstance(self.index, tuple):
-            assert isinstance(self.composite_envelope, CompositeEnvelope)
-            self.composite_envelope.apply_operation(operation, self)
-            return
-
         assert isinstance(self.expansion_level, ExpansionLevel)
+
         while self.expansion_level < operation.required_expansion_level:
             self.expand()
 
         operation.compute_dimensions(0, jnp.array([0]))
 
-        if self.expansion_level == ExpansionLevel.Vector:
-            assert isinstance(self.state, jnp.ndarray)
-            assert self.state.shape == (self.dimensions, 1)
-            self.state = jnp.einsum("ij,jk->ik", operation.operator, self.state)
-            if not jnp.any(jnp.abs(self.state) > 0):
-                raise ValueError(
-                    "The state is entirely composed of zeros, is |0⟩ "
-                    "attempted to be annihilated?"
+        match self.expansion_level:
+            case ExpansionLevel.Vector:
+                assert isinstance(self.state, jnp.ndarray)
+                self.state = apply_operation_vector(
+                    [self], [self], self.state, operation.operator
+                )
+            case ExpansionLevel.Matrix:
+                assert isinstance(self.state, jnp.ndarray)
+                self.state = apply_operation_matrix(
+                    [self], [self], self.state, operation.operator
                 )
 
-        #            if operation.renormalize:
-        #               self.state = self.state / jnp.linalg.norm(self.state)
-        if self.expansion_level == ExpansionLevel.Matrix:
-            assert isinstance(self.state, jnp.ndarray)
-            assert self.state.shape == (self.dimensions, self.dimensions)
-            self.state = jnp.einsum(
-                "ca,ab,db->cd",
-                operation.operator,
-                self.state,
-                jnp.conj(operation.operator),
+        assert isinstance(self.state, jnp.ndarray)
+        if not jnp.any(jnp.abs(self.state) > 0):
+            raise ValueError(
+                "The state is entirely composed of zeros, is |0⟩ "
+                "attempted to be anniilated?"
             )
-            if not jnp.any(jnp.abs(self.state) > 0):
-                raise ValueError(
-                    "The state is entirely composed of zeros, is |0⟩ "
-                    "attempted to be anniilated?"
-                )
-            if operation.renormalize:
-                self.state = self.state / jnp.linalg.norm(self.state)
+        if operation.renormalize:
+            self.state = self.state / jnp.linalg.norm(self.state)
 
         C = Config()
         if C.contractions:

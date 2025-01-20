@@ -3,20 +3,11 @@ from typing import Any, List, Tuple, Union
 
 import jax.numpy as jnp
 
-from photon_weave._math.ops import (
-    hadamard_operator,
-    identity_operator,
-    rx_operator,
-    ry_operator,
-    rz_operator,
-    s_operator,
-    sx_operator,
-    t_operator,
-    u3_operator,
-    x_operator,
-    y_operator,
-    z_operator,
-)
+from photon_weave._math.ops import (hadamard_operator, identity_operator,
+                                    rx_operator, ry_operator, rz_operator,
+                                    s_operator, sx_operator, t_operator,
+                                    u3_operator, x_operator, y_operator,
+                                    z_operator)
 from photon_weave.state.expansion_levels import ExpansionLevel
 
 
@@ -74,7 +65,7 @@ class PolarizationOperationType(Enum):
 
         \hat{S} = \begin{bmatrix} 1 & 0 \\ 0 & i \end{bmatrix}
 
-    T Opeator (T)
+    T Operator (T)
     -------------
     Constructs T (:math:`\hat T`) operator
     .. math::
@@ -139,7 +130,8 @@ class PolarizationOperationType(Enum):
     Requires three arguments "phi", "theta", "omega"
 
     Usage Example
-    >>> op = Operation(PolarizationOperationType.RZ, theta=jnp.pi)
+    >>> op = Operation(
+        PolarizationOperationType.U3, phi=jnp.pi, theta=jnp.pi/2, omega=jnp.pi/4)
 
     Custom
     ------
@@ -150,79 +142,79 @@ class PolarizationOperationType(Enum):
     >>> op = Operation(PolarizationOperationType.Custom, operator=operator)
     """
 
-    I: Tuple[bool, List[str], ExpansionLevel, int] = (
+    I: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         [],
         ExpansionLevel.Vector,
         1,
     )
-    X: Tuple[bool, List[str], ExpansionLevel, int] = (
+    X: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         [],
         ExpansionLevel.Vector,
         2,
     )
-    Y: Tuple[bool, List[str], ExpansionLevel, int] = (
+    Y: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         [],
         ExpansionLevel.Vector,
         3,
     )
-    Z: Tuple[bool, List[str], ExpansionLevel, int] = (
+    Z: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         [],
         ExpansionLevel.Vector,
         4,
     )
-    H: Tuple[bool, List[str], ExpansionLevel, int] = (
+    H: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         [],
         ExpansionLevel.Vector,
         5,
     )
-    S: Tuple[bool, List[str], ExpansionLevel, int] = (
+    S: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         [],
         ExpansionLevel.Vector,
         6,
     )
-    T: Tuple[bool, List[str], ExpansionLevel, int] = (
+    T: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         [],
         ExpansionLevel.Vector,
         7,
     )
-    SX: Tuple[bool, List[str], ExpansionLevel, int] = (
+    SX: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         [],
         ExpansionLevel.Vector,
         8,
     )
-    RX: Tuple[bool, List[str], ExpansionLevel, int] = (
+    RX: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         ["theta"],
         ExpansionLevel.Vector,
         9,
     )
-    RY: Tuple[bool, List[str], ExpansionLevel, int] = (
+    RY: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         ["theta"],
         ExpansionLevel.Vector,
         10,
     )
-    RZ: Tuple[bool, List[str], ExpansionLevel, int] = (
+    RZ: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         ["theta"],
         ExpansionLevel.Vector,
         11,
     )
-    U3: Tuple[bool, List[str], ExpansionLevel, int] = (
+    U3: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         ["phi", "theta", "omega"],
         ExpansionLevel.Vector,
         12,
     )
-    Custom: Tuple[bool, List[str], ExpansionLevel, int] = (
+    Custom: Tuple[bool, List[str], ExpansionLevel, int] = (  # type: ignore[misc]
         True,
         ["operator"],
         ExpansionLevel.Vector,

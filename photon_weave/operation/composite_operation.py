@@ -5,19 +5,14 @@ from typing import Any, List, Union
 import jax.numpy as jnp
 from jax.scipy.linalg import expm
 
-from photon_weave._math.ops import (
-    annihilation_operator,
-    controlled_not_operator,
-    controlled_swap_operator,
-    controlled_z_operator,
-    creation_operator,
-    swap_operator,
-)
+from photon_weave._math.ops import (annihilation_operator,
+                                    controlled_not_operator,
+                                    controlled_swap_operator,
+                                    controlled_z_operator, creation_operator,
+                                    swap_operator)
 from photon_weave.extra import interpreter
 from photon_weave.state.base_state import BaseState
 from photon_weave.state.expansion_levels import ExpansionLevel
-
-# from photon_weave.state.fock import Fock
 
 
 class CompositeOperationType(Enum):
@@ -305,6 +300,8 @@ class CompositeOperationType(Enum):
         the dimensionality of the space can be changed before the application
         and the dimensionality of the operator and space match
         """
+        from photon_weave.state.fock import Fock
+
         match self:
             case CompositeOperationType.NonPolarizingBeamSplitter:
                 dim = int(jnp.sum(jnp.array(num_quanta))) + 1
@@ -319,5 +316,11 @@ class CompositeOperationType(Enum):
                 return [2, 2]
             case CompositeOperationType.Expression:
                 assert isinstance(num_quanta, list)
-                return [d + 1 for d in num_quanta]
+                dims = []
+                for i, s in enumerate(self.expected_base_state_types):
+                    if s is Fock:
+                        dims.append(num_quanta[i] + 2)
+                    else:
+                        dims.append(num_quanta[i])
+                return dims
         raise ValueError("Operation Type not recognized")

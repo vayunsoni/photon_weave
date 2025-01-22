@@ -1,5 +1,6 @@
 # Photon Weave
 ![Coverage](assets/coverage.svg)
+![Build Status](https://github.com/<username>/<repo>/actions/workflows/tests.yml/badge.svg)
 
 Photon Weave is a quantum optics simulator designed for the modeling and analysis of quantum systems. Focusing on individual temporal modes, it offers comprehensive support for simulating quantum states within Fock spaces along with their polarization degrees of freedom.
 

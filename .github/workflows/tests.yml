@@ -1,10 +1,8 @@
 on:
   push:
     branches:
-      - refractor
+      - master
   pull_request:
-    branches:
-      - refractor
 
 jobs:
   test:
@@ -26,10 +24,11 @@ jobs:
           pip install coverage coverage-badge
           pip install pytest pytest-cov
 
-      - name: Run tests with coverage
+      - name: Run tests
         run: |
           coverage run -m pytest
           coverage report
+          coverage xml
 
       - name: Generate coverage badge
         run: |

@@ -12,8 +12,13 @@ import jax.numpy as jnp
 
 #PORT 1
 env1 = Envelope()
-env1.fock.state = 5
-env1.polarization.state = PolarizationLabel.V
+env1.fock.state = 1
+env1.polarization.state = PolarizationLabel.D
+
+print("Input")
+print("Port 1: ")
+print("The number of photons in",env1.polarization ,"polarization is: ", env1.fock.state)
+
 env1.polarization.expand()
 
 env2 = Envelope()
@@ -22,6 +27,8 @@ env2.polarization.state = jnp.array(
   [jnp.conj(env1.polarization.state[1]),
    jnp.conj(env1.polarization.state[0])]
 )
+
+
 
 
 #Operations
@@ -52,8 +59,10 @@ else:
 
 #PORT 2
 env3 = Envelope()
-env3.fock.state = 3
-env3.polarization.state = PolarizationLabel.V
+env3.fock.state = 1
+env3.polarization.state = PolarizationLabel.R
+print("Port 2")
+print("The number of photons in",env3.polarization ,"polarization is: ", env3.fock.state)
 env3.polarization.expand()
 
 
@@ -83,12 +92,12 @@ else:
 ce_3 = CompositeEnvelope(env1, env4) #Consists of H polarized photons from port 1, and V polarized photons from port 2
 ce_4 = CompositeEnvelope(env3, env2) #Consists of H polarized photons from port 2, and V polarized photons from port 1
 
-
+print("Output")
 outcome_1 = ce_3.measure(env1.fock, env4.fock)
 print("Port 1: ")
-print("The number of photons in ",env1.polarization ," polarization is: ", outcome_1[env1.fock])
-print("The number of photons in ",env4.polarization, " polarization is:",  outcome_1[env4.fock])
+print("The number of photons in",env1.polarization ,"polarization is: ", outcome_1[env1.fock])
+print("The number of photons in",env4.polarization, "polarization is:",  outcome_1[env4.fock])
 outcome_2 = ce_4.measure(env3.fock, env2.fock)
 print("Port 2")
-print("The number of photons in ",env3.polarization ," polarization is: ", outcome_2[env3.fock])
-print("The number of photons in ",env2.polarization, " polarization is:",  outcome_2[env2.fock])
+print("The number of photons in",env3.polarization ,"polarization is: ", outcome_2[env3.fock])
+print("The number of photons in",env2.polarization, "polarization is:",  outcome_2[env2.fock])

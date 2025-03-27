@@ -1,0 +1,33 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - pow_operation
+  pull_request:
+    branches:
+      - pow_operation
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.8'
+
+    - name: Install dependencies
+      run: |
+          pip install .
+          pip install tox
+          pip install coverage coverage-badge
+          pip install pytest pytest-cov
+          
+    - name: Run tests
+      run: |
+        pytest

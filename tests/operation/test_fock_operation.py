@@ -458,7 +458,7 @@ class TestExpressionOperator(unittest.TestCase):
             "n": lambda dims: number_operator(dims[0]),
         }
         op = Operation(
-            FockOperationType.Expresion,
+            FockOperationType.Expression,
             expr=("expm", ("s_mult", -1j, jnp.pi, "n")),
             context=context,
         )
@@ -474,7 +474,7 @@ class TestExpressionOperator(unittest.TestCase):
             "n": lambda dims: number_operator(dims[0]),
         }
         op = Operation(
-            FockOperationType.Expresion,
+            FockOperationType.Expression,
             expr=("expm", ("sub", ("s_mult", 1, "a_dag"), ("s_mult", 1, "a"))),
             context=context,
         )
@@ -489,7 +489,7 @@ class TestExpressionOperator(unittest.TestCase):
             "n": lambda dims: number_operator(dims[0]),
         }
         op = Operation(
-            FockOperationType.Expresion,
+            FockOperationType.Expression,
             expr=("expm", ("s_mult", -1j, jnp.pi, "n")),
             context=context,
         )
@@ -507,7 +507,7 @@ class TestExpressionOperator(unittest.TestCase):
             "n": lambda dims: number_operator(dims[0]),
         }
         op = Operation(
-            FockOperationType.Expresion,
+            FockOperationType.Expression,
             expr=("expm", ("s_mult", -1j, jnp.pi, "n")),
             context=context,
         )
@@ -528,7 +528,7 @@ class TestExpressionOperator(unittest.TestCase):
             "n": lambda dims: number_operator(dims[0]),
         }
         op = Operation(
-            FockOperationType.Expresion,
+            FockOperationType.Expression,
             expr=("expm", ("s_mult", -1j, jnp.pi, "n")),
             context=context,
         )
@@ -552,7 +552,7 @@ class TestExpressionOperator(unittest.TestCase):
             "n": lambda dims: number_operator(dims[0]),
         }
         op = Operation(
-            FockOperationType.Expresion,
+            FockOperationType.Expression,
             expr=("expm", ("s_mult", -1j, jnp.pi, "n")),
             context=context,
         )
@@ -576,7 +576,7 @@ class TestExpressionOperator(unittest.TestCase):
             "n": lambda dims: number_operator(dims[0]),
         }
         op = Operation(
-            FockOperationType.Expresion,
+            FockOperationType.Expression,
             expr=("expm", ("s_mult", -1j, jnp.pi, "n")),
             context=context,
         )

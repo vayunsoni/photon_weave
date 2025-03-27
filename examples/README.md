@@ -13,7 +13,7 @@ The diagram below illustrates the simulated output from the Mach-Zehnder Interfe
 
 [polarizing_beam_splitter.py](./polarizing_beam_splitter.py)
 
-A Polarizing Beam Splitter (PBS) is a type of beam splitter that splits a beam of light into two beams with orthogonal polarizations. It is widely used in optics and photonics to manipulate and analyze polarized light. A Horizontally polarized photon is transmitted while a vertically polarized photon is reflected. If a photon is in a superposition state of both horizontal and vertical polarizations, the photon is obsevered at either the horizontal or vertical port with a certain probability, depending on its polarization.
+In quantum optics, a Polarizing Beam Splitter (PBS) is a device that routes single photons based on their polarization state. It transmits photons with horizontal polarization and reflects those with vertical polarization. When a photon is in a quantum superposition of horizontal and vertical polarizations, the photon is detected at either the transmitted or reflected port with probabilities determined by its polarization amplitudes.
 
 In this example, three diagonally polarized photons are input into Port 1 of the PBS. The figure below shows the probability distribution of detecting different combinations of horizontally and vertically polarized photons at the output ports.
 
